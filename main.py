@@ -45,6 +45,10 @@ class CompareRequest(BaseModel):
     sites: list[str] | None = Field(default=None, max_length=8)  # optional preferred domains
 
 
+class DeleteAccount(BaseModel):
+    password: str = Field(..., min_length=1, max_length=200)
+
+
 def params_of(req: CompareRequest) -> dict:
     p = {"product": req.product.strip(), "country": req.country.strip(), "city": (req.city or "").strip(),
          "sites": [s.strip().lower() for s in (req.sites or [])]}
@@ -115,6 +119,19 @@ def job_v1(job_id: str, who=Depends(partner)):
     return respond(job)
 
 
+@api.post("/api/v1/account/delete", operation_id="deleteAccount", summary="Delete my account and all data tied to it")
+def delete_account(body: "DeleteAccount", bearer: str | None = Depends(oauth2)):
+    row = oauth.verify_access_token(bearer) if bearer else None
+    if not row or row["resource"] not in (None, "", config.PUBLIC_URL):
+        raise HTTPException(401, "Sign in with OAuth.", headers=CHALLENGE)
+    res = oauth.delete_user(row["user_id"], body.password)
+    if res == "limited":
+        raise HTTPException(429, "Too many attempts. Try again in 15 minutes.")
+    if res == "bad_password":
+        raise HTTPException(403, "Wrong password.")
+    return {"deleted": True}
+
+
 # ---- helpers ---------------------------------------------------------------------------
 @api.get("/api/locate", include_in_schema=False)
 def locate(request: Request, lat: float = Query(..., ge=-90, le=90), lon: float = Query(..., ge=-180, le=180)):
@@ -135,6 +152,19 @@ def locate(request: Request, lat: float = Query(..., ge=-90, le=90), lon: float 
     city = (addr.get("city") or addr.get("town") or addr.get("village") or addr.get("state_district")
             or addr.get("county") or addr.get("state") or "")
     return {"country": addr["country"], "city": city}
+
+
+@api.get("/api/history", include_in_schema=False)
+def history(request: Request, product: str = Query(..., min_length=3, max_length=120), country: str = Query(..., min_length=2, max_length=60),
+            city: str = Query("", max_length=60)):
+    """Lowest recorded prices for a product and region over the last 90 days."""
+    p = {"product": product.strip(), "country": country.strip(), "city": city.strip(), "sites": []}
+    err = validate(p)
+    if err:
+        raise HTTPException(422, err)
+    if db.rate_check("hist:" + client_ip(request), 60):
+        raise HTTPException(429, "Too many requests.")
+    return db.history_summary(db.history_key(p["product"], p["country"], p["city"]))
 
 
 @api.get("/api/admin/stats", include_in_schema=False)

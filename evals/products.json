@@ -1,0 +1,15 @@
+{
+  "_help": "Add 30-50 cases. Fill expected_* from real store pages you checked yourself on the day. Set enabled to true. Do not guess prices.",
+  "cases": [
+    {
+      "id": "example-1",
+      "enabled": false,
+      "product": "REPLACE with an exact product variant, e.g. brand model storage colour",
+      "country": "India",
+      "city": "",
+      "expected_min_price": null,
+      "expected_max_price": null,
+      "expected_stores_any": []
+    }
+  ]
+}

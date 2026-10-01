@@ -20,5 +20,8 @@ Search fees are $10 per 1,000 searches (Anthropic's published price when written
 | 401 on /mcp after an hour | Client must use the refresh token; check it stores it |
 | Many `429`s | Raise `RATE_LIMIT` / `USER_RATE_LIMIT` deliberately, not blindly |
 
+## Evals
+`python evals/run_evals.py` (see EVALS.md) before changing prompts or models.
+
 ## Tests
 `pip install -r requirements-dev.txt && python -m pytest -q tests` (no network or API key needed; the agent is faked).

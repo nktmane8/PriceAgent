@@ -8,8 +8,10 @@ Schema: `GET /openapi.json`. Base URL = `PUBLIC_URL`.
 | `POST /api/v1/compare` | OAuth bearer or `X-API-Key` | Start and wait up to 50 s. 200 result or 202 + job_id |
 | `GET /api/v1/jobs/{id}` | same | Poll |
 | `POST /mcp` | OAuth bearer | MCP tools `compare_prices`, `get_comparison_result` |
+| `POST /api/v1/account/delete` | OAuth bearer | Body `{"password"}`; deletes account, tokens, jobs, usage |
+| `GET /api/history?product&country&city` | none, 60/h per IP | Daily lowest effective prices and the lowest ever seen (90 days) |
 | `GET /api/locate?lat&lon` | none, 20/h per IP | Coordinates to country + city |
-| `GET /api/admin/stats` | `X-Admin-Key` | Jobs, cache, tokens, searches, estimated search cost |
+| `GET /api/admin/stats` | `X-Admin-Key` | Jobs, cache hit rate, average agent seconds, top errors, searches and cost by caller type, history rows |
 | `GET /healthz` | none | Health check |
 | `/oauth/register, authorize, token, revoke`, `/.well-known/*` | see ARCHITECTURE | OAuth server |
 

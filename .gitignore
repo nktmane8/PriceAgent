@@ -9,3 +9,4 @@ data/
 *.db-wal
 *.db-shm
 price-agent.zip
+evals/report.json

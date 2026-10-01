@@ -49,6 +49,8 @@ def _work(jid, key, params):
     try:
         data, usage = agent.run_agent(params["product"], params["country"], params["city"], params["sites"])
         db.cache_set(key, data)
+        if params.get("kind", "prices") == "prices":
+            db.record_history(db.history_key(params["product"], params["country"], params["city"]), data)
         db.job_update(jid, status="done", result=data, source="agent", **usage)
     except agent.AgentError as e:
         db.job_update(jid, status="error", error=str(e))

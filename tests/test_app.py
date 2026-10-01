@@ -138,7 +138,7 @@ def test_mcp_requires_oauth_and_lists_tools(client):
     H["Authorization"] = "Bearer " + tok
     assert client.post("/mcp", json=init, headers=H).status_code == 200
     tools = client.post("/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"}, headers=H).json()
-    assert {t["name"] for t in tools["result"]["tools"]} == {"compare_prices", "get_comparison_result"}
+    assert {t["name"] for t in tools["result"]["tools"]} == {"compare_prices", "get_reviews_and_alternatives", "get_comparison_result"}
     call = client.post("/mcp", json={"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {
         "name": "compare_prices", "arguments": {"product": "Phone X 128GB", "country": "India"}}}, headers=H).json()
     assert '"status": "done"' in call["result"]["content"][0]["text"]
@@ -155,3 +155,48 @@ def test_purge_and_restart_recovery(client):
         c.execute("UPDATE cache SET expires_at=1")
     db.purge()
     assert db.cache_get("old") is None
+
+
+def test_insights_job_drops_unsourced_reviews_and_has_own_cache(client, calls):
+    assert client.post("/api/jobs", json={**BODY, "kind": "bogus"}).status_code == 422
+    r = client.post("/api/jobs", json={**BODY, "kind": "insights"}).json()
+    j = poll(client, r["job_id"])
+    res = j["result"]
+    assert [x["source"] for x in res["reviews"]] == ["Example Paper"]          # review without a URL removed
+    assert res["alternatives"][0]["url"] == "" and res["alternatives"][0]["name"] == "Phone Y"
+    assert calls == []                                                          # price agent not used
+    assert client.post("/api/jobs", json={**BODY, "kind": "insights"}).json()["cached"] is True
+    prices = poll(client, client.post("/api/jobs", json=BODY).json()["job_id"])  # separate cache key
+    assert "verdict" not in prices["result"] and len(calls) == 1
+
+
+def test_price_history_is_recorded_once_per_fresh_run(client):
+    poll(client, client.post("/api/jobs", json=BODY).json()["job_id"])
+    q = {"product": BODY["product"], "country": BODY["country"], "city": BODY["city"]}
+    h = client.get("/api/history", params=q).json()
+    assert h["lowest"]["store"] == "a.in" and h["lowest"]["price"] == 90 and len(h["days"]) == 1
+    client.post("/api/jobs", json=BODY)                                  # cache hit: no new data point
+    with db.conn() as c:
+        assert c.execute("SELECT COUNT(*) FROM price_history").fetchone()[0] == 2
+    assert client.get("/api/history", params={**q, "product": "x"}).status_code == 422
+
+
+def test_admin_metrics_fields(client):
+    poll(client, client.post("/api/jobs", json=BODY).json()["job_id"])
+    client.post("/api/jobs", json=BODY)
+    s = client.get("/api/admin/stats", headers={"X-Admin-Key": "adm"}).json()
+    assert s["cache_hit_rate"] == 0.5 and s["by_principal_type"]["ip"]["jobs"] == 2
+    assert "avg_agent_seconds" in s and "top_errors" in s and s["price_history_rows"] == 2
+
+
+def test_account_deletion_removes_everything(client):
+    cid, ver, r = sign_in(client, email="del@example.com")
+    H = {"Authorization": "Bearer " + exchange(client, cid, ver, r).json()["access_token"]}
+    client.post("/api/v1/compare", json=BODY, headers=H)
+    assert client.post("/api/v1/account/delete", json={"password": "wrong password 12"}, headers=H).status_code == 403
+    assert client.post("/api/v1/account/delete", json={"password": "correct horse 1"}, headers=H).status_code == 200
+    assert client.post("/api/v1/compare", json=BODY, headers=H).status_code == 401      # token gone
+    with db.conn() as c:
+        assert c.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
+        assert c.execute("SELECT COUNT(*) FROM jobs WHERE principal LIKE 'user:%'").fetchone()[0] == 0
+    assert sign_in(client, email="del@example.com", action="login")[2].status_code == 401

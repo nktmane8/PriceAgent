@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS usage(id INTEGER PRIMARY KEY, principal TEXT NOT NULL
 CREATE INDEX IF NOT EXISTS ix_usage ON usage(principal, ts);
 CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, key TEXT NOT NULL, status TEXT NOT NULL, product TEXT, country TEXT, city TEXT, sites TEXT, principal TEXT, result TEXT, error TEXT, source TEXT, input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0, searches INTEGER DEFAULT 0, created_at REAL NOT NULL, updated_at REAL NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_jobs_key ON jobs(key, status);
+CREATE TABLE IF NOT EXISTS price_history(id INTEGER PRIMARY KEY, key TEXT NOT NULL, store TEXT NOT NULL, price REAL, effective_price REAL, currency TEXT, ts REAL NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_hist ON price_history(key, ts);
 """
 
 
@@ -126,6 +128,34 @@ def job_active(key):
     return r["id"] if r else None
 
 
+# ---- price history -----------------------------------------------------
+def history_key(product, country, city):
+    return "|".join([product.lower(), country.lower(), city.lower()])
+
+
+def record_history(hkey, data):
+    """Save every offer of a fresh (not cached) price run. Product and prices only, no user data."""
+    now = time.time()
+    rows = [(hkey, r["site"], r["price"], r["effective_price"], data.get("currency", ""), now)
+            for r in data.get("results", []) if r.get("effective_price") is not None]
+    if rows:
+        with tx() as c:
+            c.executemany("INSERT INTO price_history(key,store,price,effective_price,currency,ts) VALUES(?,?,?,?,?,?)", rows)
+
+
+def history_summary(hkey, days=90):
+    since = time.time() - days * 86400
+    with conn() as c:
+        daily = [dict(r) for r in c.execute(
+            "SELECT date(ts,'unixepoch') AS day, MIN(effective_price) AS low FROM price_history "
+            "WHERE key=? AND ts>? AND effective_price IS NOT NULL GROUP BY day ORDER BY day", (hkey, since))]
+        best = c.execute("SELECT store, effective_price, currency, date(ts,'unixepoch') AS date FROM price_history "
+                         "WHERE key=? AND ts>? AND effective_price IS NOT NULL ORDER BY effective_price ASC LIMIT 1",
+                         (hkey, since)).fetchone()
+    return {"days": daily, "lowest": ({"store": best["store"], "price": best["effective_price"],
+                                       "currency": best["currency"], "date": best["date"]} if best else None)}
+
+
 # ---- housekeeping --------------------------------------------------------
 def purge():
     now = time.time()
@@ -136,16 +166,30 @@ def purge():
         c.execute("DELETE FROM oauth_codes WHERE expires_at<?", (now,))
         c.execute("DELETE FROM oauth_tokens WHERE expires_at<?", (now - 86400,))
         c.execute("DELETE FROM jobs WHERE created_at<?", (now - 7 * 86400,))
+        c.execute("DELETE FROM price_history WHERE ts<?", (now - 180 * 86400,))
 
 
 def stats():
+    """Admin metrics: volume, latency, cache hit rate, failures, cost drivers."""
     with conn() as c:
         one = lambda q: c.execute(q).fetchone()[0]
         jobs = {r["status"]: r["n"] for r in c.execute("SELECT status, COUNT(*) n FROM jobs GROUP BY status")}
         s = one("SELECT COALESCE(SUM(searches),0) FROM jobs")
+        done = one("SELECT COUNT(*) FROM jobs WHERE status='done'")
+        cached = one("SELECT COUNT(*) FROM jobs WHERE status='done' AND source='cache'")
+        errors = [dict(r) for r in c.execute("SELECT error, COUNT(*) n FROM jobs WHERE status='error' "
+                                             "GROUP BY error ORDER BY n DESC LIMIT 5")]
+        by_type = {r["t"]: dict(jobs=r["jobs"], searches=r["s"]) for r in c.execute(
+            "SELECT substr(principal,1,instr(principal,':')-1) t, COUNT(*) jobs, COALESCE(SUM(searches),0) s "
+            "FROM jobs GROUP BY t")}
         return {"jobs": jobs, "users": one("SELECT COUNT(*) FROM users"),
                 "oauth_clients": one("SELECT COUNT(*) FROM oauth_clients"),
                 "cache_entries": one("SELECT COUNT(*) FROM cache"),
+                "price_history_rows": one("SELECT COUNT(*) FROM price_history"),
                 "input_tokens": one("SELECT COALESCE(SUM(input_tokens),0) FROM jobs"),
                 "output_tokens": one("SELECT COALESCE(SUM(output_tokens),0) FROM jobs"),
-                "web_searches": s, "search_cost_usd_estimate": round(s * 0.01, 2)}
+                "web_searches": s, "search_cost_usd_estimate": round(s * 0.01, 2),
+                "cache_hit_rate": round(cached / done, 3) if done else None,
+                "avg_agent_seconds": round(one("SELECT COALESCE(AVG(updated_at-created_at),0) FROM jobs "
+                                               "WHERE status='done' AND source='agent'"), 1),
+                "top_errors": errors, "by_principal_type": by_type}

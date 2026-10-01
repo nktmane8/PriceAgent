@@ -271,3 +271,21 @@ def verify_access_token(t):
         r = c.execute("SELECT * FROM oauth_tokens WHERE hash=? AND kind='access' AND revoked=0 AND expires_at>?",
                       (sha(t), time.time())).fetchone()
     return dict(r) if r else None
+
+
+def delete_user(uid, password):
+    """Delete an account and everything tied to it. Returns 'ok', 'bad_password' or 'limited'."""
+    if db.rate_check(f"delacct:{uid}", 5, 900):
+        return "limited"
+    with db.conn() as c:
+        u = c.execute("SELECT pw_hash FROM users WHERE id=?", (uid,)).fetchone()
+    if not u or not check_pw(password, u["pw_hash"]):
+        return "bad_password"
+    mine = (f"user:{uid}", f"user:{uid}:insights")
+    with db.tx() as c:  # one transaction: all or nothing
+        c.execute("DELETE FROM oauth_tokens WHERE user_id=?", (uid,))
+        c.execute("DELETE FROM oauth_codes WHERE user_id=?", (uid,))
+        c.execute("DELETE FROM jobs WHERE principal IN (?,?)", mine)
+        c.execute("DELETE FROM usage WHERE principal IN (?,?)", mine)
+        c.execute("DELETE FROM users WHERE id=?", (uid,))
+    return "ok"
