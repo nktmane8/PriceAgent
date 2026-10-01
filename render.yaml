@@ -1,0 +1,28 @@
+# One instance only: the job threads and SQLite live in this process.
+services:
+  - type: web
+    name: price-agent
+    runtime: python
+    plan: starter            # persistent disks need a paid plan (check Render pricing); free plans lose data on restart
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false          # secret
+      - key: PUBLIC_URL
+        sync: false          # your https URL, e.g. https://price-agent.onrender.com (OAuth issuer)
+      - key: API_KEYS
+        sync: false          # secret, optional: partner keys for /api/v1
+      - key: ADMIN_KEY
+        sync: false          # secret, optional: enables /api/admin/stats
+      - key: NOMINATIM_CONTACT
+        sync: false          # your email or site (OpenStreetMap usage policy)
+      - key: DATABASE_PATH
+        value: /var/data/price-agent.db
+      - key: PYTHON_VERSION
+        value: "3.11.9"

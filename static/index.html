@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Price Comparison Agent</title>
+<style>
+  :root { --bg:#f6f7f4; --card:#fff; --text:#1c2321; --muted:#5d6a66; --line:#dde2df; --accent:#0a7a5a; --best:#e6f4ee; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111614; --card:#1a211e; --text:#e8eeeb; --muted:#9aa8a3; --line:#2b3531; --accent:#3ecf9e; --best:#16302a; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  main { max-width:640px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.3rem; margin:8px 0 12px; }
+  form { display:grid; gap:8px; }
+  .line { display:flex; gap:8px; }
+  input { flex:1; min-width:0; padding:12px; font-size:1rem; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--text); }
+  button, a.open { padding:12px 16px; font-size:1rem; border:0; border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; text-decoration:none; }
+  @media (prefers-color-scheme: dark) { button, a.open { color:#06241a; } }
+  button:disabled { opacity:.6; cursor:wait; }
+  button.alt { background:transparent; color:var(--accent); border:1px solid var(--accent); padding:8px 12px; font-size:.9rem; justify-self:start; }
+  :focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; margin-top:12px; }
+  .best { background:var(--best); border-color:var(--accent); }
+  .row { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  .site { font-weight:600; }
+  .price { font-size:1.25rem; font-weight:700; }
+  .muted { color:var(--muted); font-size:.9rem; }
+  .oos { color:#c0392b; font-size:.9rem; }
+  ul { margin:8px 0; padding-left:20px; }
+  a.open { display:inline-block; margin-top:6px; padding:8px 12px; font-size:.9rem; }
+  #status { margin-top:16px; color:var(--muted); }
+  #status.error { color:#c0392b; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Price Comparison Agent</h1>
+  <form id="form">
+    <div class="line">
+      <input id="q" type="text" minlength="3" maxlength="120" required
+             placeholder="Product, e.g. iPhone 15 128GB Black" aria-label="Product name">
+      <button id="go" type="submit">Compare</button>
+    </div>
+    <div class="line">
+      <input id="country" type="text" minlength="2" maxlength="60" required aria-label="Country" placeholder="Country">
+      <input id="city" type="text" maxlength="60" aria-label="City or area (optional)" placeholder="City or area (optional)">
+    </div>
+    <button id="loc" type="button" class="alt">Use my location</button>
+  </form>
+  <div id="status" role="status"></div>
+  <div id="out"></div>
+  <p class="muted">Stores are discovered for your region. Prices change quickly and some stores block automated checks, so confirm on the store before buying.</p>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const form = $("form"), q = $("q"), country = $("country"), city = $("city"),
+      go = $("go"), status = $("status"), out = $("out");
+
+// Helper: create an element with text set safely via textContent (never innerHTML).
+function el(tag, text, cls) {
+  const e = document.createElement(tag);
+  if (text !== undefined) e.textContent = text;
+  if (cls) e.className = cls;
+  return e;
+}
+
+// Region: restore saved choice, else guess the country from the browser locale (e.g. en-IN -> India).
+try {
+  country.value = localStorage.getItem("pa_country") || "";
+  city.value = localStorage.getItem("pa_city") || "";
+} catch (e) {}
+if (!country.value) {
+  try {
+    const m = (navigator.language || "").match(/-([A-Za-z]{2})$/);
+    if (m) country.value = new Intl.DisplayNames(["en"], {type: "region"}).of(m[1].toUpperCase()) || "";
+  } catch (e) {}
+}
+
+// No country yet (no saved value, no locale region): ask the user, or offer device location.
+if (!country.value) {
+  status.textContent = "Enter your country, or tap Use my location.";
+  country.focus();
+}
+
+// "Use my location": browser geolocation (GPS on phones) -> server turns it into country + city.
+// Needs HTTPS (or localhost) and the user's permission. Coordinates are rounded before sending.
+$("loc").addEventListener("click", () => {
+  if (!navigator.geolocation) { status.textContent = "This browser cannot share location. Type your country and city."; return; }
+  status.className = ""; status.textContent = "Asking your device for your location…";
+  navigator.geolocation.getCurrentPosition(async pos => {
+    try {
+      const res = await fetch("/api/locate?lat=" + pos.coords.latitude.toFixed(2) + "&lon=" + pos.coords.longitude.toFixed(2));
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof d.detail === "string" ? d.detail : "Location lookup failed.");
+      country.value = d.country; city.value = d.city || "";
+      status.textContent = "Location set to " + [d.city, d.country].filter(Boolean).join(", ") + ". Edit it if it looks wrong.";
+    } catch (err) { status.className = "error"; status.textContent = err.message; }
+  }, err => {
+    status.className = "error";
+    status.textContent = (err.code === 1 ? "Location permission was denied." : "Could not detect your location.") + " Type your country and city instead.";
+  }, {timeout: 10000, maximumAge: 600000});
+});
+
+// Format money using the currency code returned by the server (falls back safely).
+function money(n, cur) {
+  if (typeof n !== "number" || !isFinite(n)) return "n/a";
+  cur = /^[A-Z]{3}$/.test(cur || "") ? cur : null;
+  try {
+    return new Intl.NumberFormat(undefined, cur ? {style: "currency", currency: cur, maximumFractionDigits: 0} : {}).format(n);
+  } catch (e) { return (cur || "") + " " + n; }
+}
+
+function render(data) {
+  out.replaceChildren();
+  const cur = data.currency;
+  const results = Array.isArray(data.results) ? data.results.slice() : [];
+  // Lowest effective price first; missing prices go last.
+  results.sort((a, b) => (a.effective_price ?? Infinity) - (b.effective_price ?? Infinity));
+
+  if (data.region) out.append(el("div", "Showing stores for: " + data.region, "muted"));
+
+  if (data.best_deal && data.best_deal.site) {
+    const b = el("div", undefined, "card best");
+    b.append(el("div", "Best deal", "muted"));
+    const r = el("div", undefined, "row");
+    r.append(el("span", data.best_deal.site, "site"), el("span", money(data.best_deal.effective_price, cur), "price"));
+    b.append(r, el("div", data.best_deal.why || ""));
+    out.append(b);
+  }
+
+  for (const item of results) {
+    const c = el("div", undefined, "card");
+    const r = el("div", undefined, "row");
+    r.append(el("span", item.site || "Unknown store", "site"), el("span", money(item.effective_price, cur), "price"));
+    c.append(r);
+    const kind = [item.store_type, item.location].filter(Boolean).join(", ");
+    if (kind) c.append(el("div", kind, "muted"));
+    c.append(el("div", "Listed price: " + money(item.price, cur), "muted"));
+    if (item.in_stock === false) c.append(el("div", "Out of stock", "oos"));
+    if (Array.isArray(item.offers) && item.offers.length) {
+      const ul = el("ul");
+      item.offers.forEach(o => ul.append(el("li", String(o))));
+      c.append(ul);
+    }
+    // Only link to real http(s) URLs.
+    if (typeof item.url === "string" && item.url.startsWith("http")) {
+      const a = el("a", "Open product", "open");
+      a.href = item.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+      c.append(a);
+    }
+    out.append(c);
+  }
+  if (!results.length) out.append(el("div", "No verified prices found.", "card"));
+  if (data.notes) out.append(el("div", String(data.notes), "card muted"));
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function call(url, opts) {
+  const res = await fetch(url, opts);
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof d.detail === "string" ? d.detail : "Request failed (" + res.status + ").");
+  return d;
+}
+
+// The server runs the slow search in a background thread; we start a job and poll it.
+form.addEventListener("submit", async e => {
+  e.preventDefault();
+  go.disabled = true; out.replaceChildren(); status.className = "";
+  try { localStorage.setItem("pa_country", country.value.trim()); localStorage.setItem("pa_city", city.value.trim()); } catch (e) {}
+  try {
+    let job = await call("/api/jobs", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({product: q.value.trim(), country: country.value.trim(), city: city.value.trim() || null})});
+    const t0 = Date.now();
+    while (job.status === "queued" || job.status === "running") {
+      if (Date.now() - t0 > 240000) throw new Error("Still running after 4 minutes. Try again later.");
+      status.textContent = (job.status === "queued" ? "Waiting in the queue…" : "Finding stores in your region and checking prices…") + " This takes 30-60 seconds.";
+      await sleep(3000);
+      job = await call("/api/jobs/" + encodeURIComponent(job.job_id));
+    }
+    if (job.status === "error") throw new Error(job.error || "The comparison failed.");
+    status.textContent = job.cached ? "Showing a recent result (under 30 minutes old)." : "";
+    render(job.result);
+  } catch (err) {
+    status.className = "error"; status.textContent = err.message;
+  } finally { go.disabled = false; }
+});
+</script>
+</body>
+</html>
