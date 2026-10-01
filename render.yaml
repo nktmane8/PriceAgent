@@ -12,6 +12,8 @@ services:
       mountPath: /var/data
       sizeGB: 1
     envVars:
+      - key: APP_ENV
+        value: production
       - key: ANTHROPIC_API_KEY
         sync: false          # secret
       - key: PUBLIC_URL

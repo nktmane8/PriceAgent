@@ -18,7 +18,8 @@ Acceptance criteria written; blocker named; size S/M/L; cost and security impact
 ## Definition of Done
 - [ ] Tests added or updated and passing (`python -m pytest -q tests`)
 - [ ] No secrets in code, logs or fixtures
-- [ ] Docs updated (README, API, ROADMAP status, CHANGELOG)
+- [ ] Docs updated (README, API, ROADMAP status, CHANGELOG); run `python tools/gen_code_map.py` if functions changed
+- [ ] New setting? Added to `config.py`, `env/` files, `.env.example` and `docs/CONFIGURATION.md`; new fixed value goes in `constants.py`
 - [ ] Cost impact stated if searches, tokens or calls per request change
 - [ ] Security checklist done if auth, input handling or rendering changed
 - [ ] If a prompt changed: eval run before and after, pass rate not lower

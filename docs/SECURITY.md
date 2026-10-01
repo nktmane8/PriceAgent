@@ -1,6 +1,7 @@
 # Security and privacy notes
 
 ## Controls in place
+- Environment files hold no secrets (they are committed); secrets come only from the real environment. Staging/production refuse to start with weak or missing config.
 - Secrets only from environment variables; tokens, auth codes and OAuth state stored hashed (SHA-256); passwords with scrypt and per-user salt.
 - OAuth: PKCE S256 mandatory, exact redirect-URI matching (loopback port-agnostic), https-only redirects, single-use codes, refresh rotation with reuse detection, audience-bound tokens, login brute-force limits (per IP and per account), `X-Frame-Options: DENY` + CSP on the sign-in page, HTML-escaped output.
 - MCP endpoint: Host and Origin validation (DNS-rebinding protection), read-only tool annotations.

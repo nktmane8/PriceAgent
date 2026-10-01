@@ -16,7 +16,9 @@ Last reviewed: 2026-10-01. Update this file in the same PR that changes any stat
 | **Price history** (recorded per fresh run, 90-day lowest shown) | Done (new) | `price_history`, `/api/history` |
 | **Metrics**: latency, cache hit rate, top errors, cost by caller type | Done (new, JSON) | `/api/admin/stats` |
 | **Evals harness** (invariant checks, optional price ranges, coverage report) | Done (new); dataset still needed | `evals/` |
-| Tests (15, offline) and CI; weekly evals workflow | Done | `tests/`, `.github/workflows/` |
+| Tests (16, offline) and CI; weekly evals workflow | Done | `tests/`, `.github/workflows/` |
+| Environments (`env/`), global constants, start-up config validation | Done (new) | `config.py`, `constants.py` |
+| Code guide, generated code reference, configuration doc, study guide | Done (new) | `docs/CODE_GUIDE.md` etc. |
 | Docs: DESIGN, ARCHITECTURE, API, SECURITY, PRIVACY (draft), RUNBOOK, PUBLISHING, BUSINESS, EVALS, STORE_COVERAGE (template), CONTRIBUTING, ENGINEERING, ADRs | Done / drafts flagged | `docs/` |
 
 ## 2. Partial

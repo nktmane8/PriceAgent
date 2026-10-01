@@ -10,3 +10,7 @@ data/
 *.db-shm
 price-agent.zip
 evals/report.json
+.env
+env/.env.local
+env/.env.staging
+env/.env.production

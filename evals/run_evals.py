@@ -14,6 +14,7 @@ from evals.checks import check_result  # noqa: E402
 
 
 def main():
+    """Run enabled eval cases against the real agent and write evals/report.json."""
     cases = [c for c in json.loads((Path(__file__).parent / "products.json").read_text())["cases"] if c.get("enabled")]
     if not cases:
         print("No enabled cases. Edit evals/products.json first.")

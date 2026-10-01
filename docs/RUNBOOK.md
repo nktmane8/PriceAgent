@@ -10,6 +10,8 @@ The disk holds `/var/data/price-agent.db`. Back up from a Render shell: `sqlite3
 Search fees are $10 per 1,000 searches (Anthropic's published price when written; verify), so each uncached comparison costs up to `MAX_SEARCHES x $0.01`, plus tokens (`input_tokens`, `output_tokens` are stored per job; multiply by your model's rates). Cache hits are free. Levers: lower `MAX_SEARCHES`, raise `CACHE_TTL_SECONDS`, lower `RATE_LIMIT`. Set a spend limit in the Anthropic Console.
 
 ## Common problems
+If the app exits at start-up with `Configuration problems: ...`, fix the listed variables (see `docs/CONFIGURATION.md`).
+
 | Symptom | Check |
 |---|---|
 | All jobs `error: Server is missing ANTHROPIC_API_KEY` | Env var set on the service |

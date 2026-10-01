@@ -17,6 +17,7 @@ Type a product and your region. The agent uses Claude with web search to find th
 - **Ops:** `/healthz`, admin stats, Render blueprint.
 
 ## Run locally
+Settings come from `env/.env.<APP_ENV>` (default `development`); secrets go in a git-ignored `.env` or your shell. See `docs/CONFIGURATION.md`.
 ```bash
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
@@ -38,9 +39,11 @@ Tests (no API key needed): `pip install -r requirements-dev.txt && python -m pyt
 - **Custom GPT:** import `https://your-app/openapi.json`, use OAuth or API key auth.
 - Directory submissions: `docs/PUBLISHING.md`.
 
-## Configuration
+## Configuration (summary; full table in `docs/CONFIGURATION.md`)
 | Variable | Default | Meaning |
 |---|---|---|
+| `APP_ENV` | development | development, test, staging or production; loads `env/.env.<APP_ENV>` |
+| `LOG_LEVEL` | INFO | DEBUG, INFO, WARNING |
 | `ANTHROPIC_API_KEY` | required | Secret |
 | `PUBLIC_URL` | `http://127.0.0.1:8000` | Public https URL; OAuth issuer; must be exact |
 | `DATABASE_PATH` | `data/price-agent.db` | SQLite file (put on the persistent disk) |
@@ -57,7 +60,7 @@ Tests (no API key needed): `pip install -r requirements-dev.txt && python -m pyt
 | `EXTRA_ORIGINS` | empty | Extra allowed browser origins for `/mcp` |
 
 ## Docs
-`docs/ROADMAP.md` (**status and TODO**) · `docs/ENGINEERING.md` (**process**) · `docs/DESIGN.md` (DDD, HLD, LLD, flows) · `docs/ARCHITECTURE.md` (tables, threads, OAuth) · `API.md` · `SECURITY.md` · `PRIVACY.md` (draft) · `RUNBOOK.md` (backups, cost, troubleshooting) · `PUBLISHING.md` · `BUSINESS.md` · `EVALS.md` · `STORE_COVERAGE.md` · `TERMS.md` (draft) · `adr/` · `CONTRIBUTING.md` · `CHANGELOG.md`
+`docs/CODE_GUIDE.md` (**read first: architecture and flows**) · `docs/STUDY_GUIDE.md` · `docs/CONFIGURATION.md` · `docs/CODE_REFERENCE.md` · `docs/ROADMAP.md` (status and TODO) · `docs/ENGINEERING.md` (**process**) · `docs/DESIGN.md` (DDD, HLD, LLD, flows) · `docs/ARCHITECTURE.md` (tables, threads, OAuth) · `API.md` · `SECURITY.md` · `PRIVACY.md` (draft) · `RUNBOOK.md` (backups, cost, troubleshooting) · `PUBLISHING.md` · `BUSINESS.md` · `EVALS.md` · `STORE_COVERAGE.md` · `TERMS.md` (draft) · `adr/` · `CONTRIBUTING.md` · `CHANGELOG.md`
 
 ## What cannot be guaranteed
 - Store discovery depends on web search; small local shops can be missed; coverage varies by country.

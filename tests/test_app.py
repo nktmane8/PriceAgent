@@ -200,3 +200,26 @@ def test_account_deletion_removes_everything(client):
         assert c.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
         assert c.execute("SELECT COUNT(*) FROM jobs WHERE principal LIKE 'user:%'").fetchone()[0] == 0
     assert sign_in(client, email="del@example.com", action="login")[2].status_code == 401
+
+
+def test_env_loader_precedence_and_production_checks(tmp_path, monkeypatch):
+    f = tmp_path / ".env.x"
+    f.write_text("# comment\nA_VAR=from_file\nB_VAR='quoted value'\nEXISTING=from_file\n")
+    monkeypatch.setenv("EXISTING", "from_shell")
+    monkeypatch.delenv("A_VAR", raising=False)
+    monkeypatch.delenv("B_VAR", raising=False)
+    config._load_file(f)
+    import os
+    assert os.environ["A_VAR"] == "from_file" and os.environ["B_VAR"] == "quoted value"
+    assert os.environ["EXISTING"] == "from_shell"                      # real env vars always win
+    monkeypatch.setattr(config, "PRODUCTION_LIKE", True)
+    monkeypatch.setattr(config, "PUBLIC_URL", "http://x")
+    monkeypatch.setattr(config, "DB_PATH", "data/x.db")
+    monkeypatch.setattr(config, "API_KEYS", ["short"])
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    found = " | ".join(config.problems())
+    for word in ("ANTHROPIC_API_KEY", "https", "absolute path", "NOMINATIM_CONTACT", "20+"):
+        assert word in found
+    import pytest
+    with pytest.raises(RuntimeError):
+        config.assert_ready()
