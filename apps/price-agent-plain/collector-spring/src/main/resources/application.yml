@@ -1,0 +1,13 @@
+# Every value can be overridden by an environment variable. Secrets (INGEST_KEY) only come from the environment.
+spring:
+  main:
+    banner-mode: "off"
+collector:
+  api-url: ${API_URL:http://localhost:3000}
+  ingest-key: ${INGEST_KEY:}
+  sources-file: ${SOURCES_FILE:sources.json}
+  delay-millis: ${DELAY_MILLIS:2000}        # politeness delay between page requests
+  run-on-startup: ${RUN_ON_STARTUP:true}
+  exit-after-run: ${EXIT_AFTER_RUN:true}    # false when running on a schedule
+  dry-run: ${DRY_RUN:false}
+  cron: ${COLLECTOR_CRON:-}                 # e.g. "0 30 2 * * *" for 02:30 daily; "-" disables the schedule

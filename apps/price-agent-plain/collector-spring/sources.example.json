@@ -1,0 +1,10 @@
+[
+  {
+    "product": "Exact product name as it should appear in the app",
+    "store": "Store name",
+    "store_type": "marketplace",
+    "country": "India",
+    "city": null,
+    "url": "https://shop.example/product-page-you-are-allowed-to-read"
+  }
+]

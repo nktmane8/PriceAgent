@@ -6,6 +6,7 @@ import json
 import logging
 import urllib.request
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlencode
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
@@ -19,10 +20,13 @@ import config
 import db
 import jobs
 import oauth
+from constants import FINISHED, KIND_INSIGHTS, KIND_PRICES, MAX_SITES
 from mcp_app import mcp
 from util import client_ip, validate
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=config.LOG_LEVEL)
+config.assert_ready()  # fail fast on bad production config
+logging.getLogger("price-agent").info("Starting with %s", config.summary())
 db.init()            # create tables (idempotent)
 jobs.start_purger()  # background cleanup thread
 
@@ -39,15 +43,23 @@ CHALLENGE = {"WWW-Authenticate": f'Bearer resource_metadata="{config.PUBLIC_URL}
 
 
 class CompareRequest(BaseModel):
+    """Request body for a price or insight lookup (validated by pydantic)."""
     product: str = Field(..., min_length=3, max_length=120)
     country: str = Field(..., min_length=2, max_length=60)
     city: str | None = Field(default=None, max_length=60)
-    sites: list[str] | None = Field(default=None, max_length=8)  # optional preferred domains
+    sites: list[str] | None = Field(default=None, max_length=MAX_SITES)  # optional preferred domains
+    kind: Literal["prices", "insights"] = KIND_PRICES  # insights = reviews + similar products
+
+
+class DeleteAccount(BaseModel):
+    """Request body for account deletion: the password confirms intent."""
+    password: str = Field(..., min_length=1, max_length=200)
 
 
 def params_of(req: CompareRequest) -> dict:
+    """Turn a request into a clean params dict and validate it (422 on bad input)."""
     p = {"product": req.product.strip(), "country": req.country.strip(), "city": (req.city or "").strip(),
-         "sites": [s.strip().lower() for s in (req.sites or [])]}
+         "sites": [s.strip().lower() for s in (req.sites or [])], "kind": req.kind}
     err = validate(p)
     if err:
         raise HTTPException(422, err)
@@ -55,6 +67,9 @@ def params_of(req: CompareRequest) -> dict:
 
 
 def start(params, principal, limit):
+    """Submit a job for this caller or raise HTTP 429; insights use a separate allowance."""
+    if params["kind"] == KIND_INSIGHTS:
+        principal += ":insights"  # separate allowance so reviews do not use up price comparisons
     try:
         return jobs.submit(params, principal, limit)
     except jobs.RateLimited as e:
@@ -74,6 +89,7 @@ def partner(key: str | None = Depends(api_key_header), bearer: str | None = Depe
 
 @api.middleware("http")
 async def security_headers(request, call_next):
+    """Middleware: add nosniff and no-referrer headers to every response."""
     r = await call_next(request)
     r.headers.setdefault("X-Content-Type-Options", "nosniff")
     r.headers.setdefault("Referrer-Policy", "no-referrer")
@@ -81,18 +97,21 @@ async def security_headers(request, call_next):
 
 
 def respond(job):
-    return JSONResponse(jobs.view(job), status_code=200 if job["status"] in ("done", "error") else 202)
+    """Job to JSON response: 200 when finished, 202 while queued or running."""
+    return JSONResponse(jobs.view(job), status_code=200 if job["status"] in FINISHED else 202)
 
 
 # ---- web page (anonymous, per-IP limit) -----------------------------------------
 @api.post("/api/jobs", include_in_schema=False)
 def create_job(req: CompareRequest, request: Request):
+    """Web page: start a price or insights job (anonymous, per-IP limit)."""
     jid = start(params_of(req), "ip:" + client_ip(request), config.RATE_LIMIT)
     return respond(db.job_get(jid))
 
 
 @api.get("/api/jobs/{job_id}", include_in_schema=False)
 def read_job(job_id: str):
+    """Web page: poll a job by its secret id."""
     job = db.job_get(job_id)
     if not job:
         raise HTTPException(404, "Unknown job.")
@@ -109,10 +128,25 @@ def compare_v1(req: CompareRequest, who=Depends(partner)):
 
 @api.get("/api/v1/jobs/{job_id}", operation_id="getComparison", summary="Get a comparison job's status or result")
 def job_v1(job_id: str, who=Depends(partner)):
+    """AI apps/partners: poll a job (OAuth or API key)."""
     job = db.job_get(job_id)
     if not job:
         raise HTTPException(404, "Unknown job.")
     return respond(job)
+
+
+@api.post("/api/v1/account/delete", operation_id="deleteAccount", summary="Delete my account and all data tied to it")
+def delete_account(body: "DeleteAccount", bearer: str | None = Depends(oauth2)):
+    """Delete the signed-in user's account and all data tied to it."""
+    row = oauth.verify_access_token(bearer) if bearer else None
+    if not row or row["resource"] not in (None, "", config.PUBLIC_URL):
+        raise HTTPException(401, "Sign in with OAuth.", headers=CHALLENGE)
+    res = oauth.delete_user(row["user_id"], body.password)
+    if res == "limited":
+        raise HTTPException(429, "Too many attempts. Try again in 15 minutes.")
+    if res == "bad_password":
+        raise HTTPException(403, "Wrong password.")
+    return {"deleted": True}
 
 
 # ---- helpers ---------------------------------------------------------------------------
@@ -137,8 +171,22 @@ def locate(request: Request, lat: float = Query(..., ge=-90, le=90), lon: float 
     return {"country": addr["country"], "city": city}
 
 
+@api.get("/api/history", include_in_schema=False)
+def history(request: Request, product: str = Query(..., min_length=3, max_length=120), country: str = Query(..., min_length=2, max_length=60),
+            city: str = Query("", max_length=60)):
+    """Lowest recorded prices for a product and region over the last 90 days."""
+    p = {"product": product.strip(), "country": country.strip(), "city": city.strip(), "sites": []}
+    err = validate(p)
+    if err:
+        raise HTTPException(422, err)
+    if db.rate_check("hist:" + client_ip(request), 60):
+        raise HTTPException(429, "Too many requests.")
+    return db.history_summary(db.history_key(p["product"], p["country"], p["city"]))
+
+
 @api.get("/api/admin/stats", include_in_schema=False)
 def admin_stats(x_admin_key: str | None = Header(default=None)):
+    """Admin metrics (needs the X-Admin-Key header)."""
     if not config.ADMIN_KEY or not x_admin_key or not hmac.compare_digest(x_admin_key, config.ADMIN_KEY):
         raise HTTPException(401, "Admin key required.")
     return db.stats()
@@ -146,6 +194,7 @@ def admin_stats(x_admin_key: str | None = Header(default=None)):
 
 @api.get("/healthz", include_in_schema=False)
 def healthz():
+    """Health check; also proves the database is reachable."""
     db.cache_get("health")  # also proves the database is reachable
     return {"status": "ok"}
 
@@ -155,6 +204,7 @@ api.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
 @api.get("/", include_in_schema=False)
 def index():
+    """Serve the web page."""
     return FileResponse(BASE / "static" / "index.html")
 
 

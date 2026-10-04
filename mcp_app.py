@@ -20,6 +20,7 @@ from util import validate
 
 
 class DbTokenVerifier:
+    """Tells the MCP SDK whether a bearer token is valid (checks DB, expiry, audience)."""
     async def verify_token(self, token: str):
         row = await anyio.to_thread.run_sync(oauth.verify_access_token, token)
         if not row or row["resource"] not in (None, "", config.PUBLIC_URL + "/mcp"):  # audience check
@@ -40,6 +41,7 @@ mcp = FastMCP(
 
 
 def _principal():
+    """Identify the calling user from the verified token."""
     t = get_access_token()  # set by the SDK's auth middleware
     return "user:" + (t.subject if t and t.subject else "unknown")
 

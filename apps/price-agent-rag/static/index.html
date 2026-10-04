@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Price Agent RAG</title>
+<style>
+:root{--bg:#f6f7f4;--card:#fff;--text:#1c2321;--muted:#5d6a66;--line:#dde2df;--accent:#0a7a5a}
+@media(prefers-color-scheme:dark){:root{--bg:#111614;--card:#1a211e;--text:#e8eeeb;--muted:#9aa8a3;--line:#2b3531;--accent:#3ecf9e}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--text)}
+main{max-width:680px;margin:0 auto;padding:16px}input,textarea,select{width:100%;padding:10px;margin:4px 0;font:inherit;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text)}
+button{padding:10px 14px;border:0;border-radius:8px;background:var(--accent);color:#fff;font:inherit;cursor:pointer}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:12px}.muted{color:var(--muted);font-size:.9rem}
+.row{display:flex;gap:8px}pre{white-space:pre-wrap;margin:0;font:inherit}a{color:var(--accent)}
+</style></head><body><main>
+<h1>Ask about a product</h1>
+<form id="f"><input id="q" required minlength="3" maxlength="500" placeholder="e.g. Is the battery good on Phone X?">
+<div class="row"><input id="p" placeholder="Product filter (optional)"><input id="c" placeholder="Country (optional)"></div>
+<button>Ask</button></form>
+<div id="s" class="muted"></div><div id="out"></div>
+<details class="card"><summary>Add knowledge (admin)</summary>
+<input id="k" type="password" placeholder="Admin key (kept only in this page)">
+<input id="t" placeholder="Title"><textarea id="x" rows="5" placeholder="Paste a review, spec sheet or article text (20+ characters)"></textarea>
+<div class="row"><input id="tp" placeholder="Product"><input id="tc" placeholder="Country">
+<select id="ty"><option>publication</option><option>video</option><option>user</option><option>specs</option><option>price</option><option>other</option></select></div>
+<input id="tu" placeholder="Source URL (optional, https://...)"><button id="add" type="button">Add to knowledge base</button></details>
+<p class="muted">Answers are generated only from the sources you added and may be incomplete. Check the cited sources.</p>
+<script>
+const $=i=>document.getElementById(i);
+function el(t,x,c){const e=document.createElement(t);if(x!==undefined)e.textContent=x;if(c)e.className=c;return e}
+async function api(url,opts){const r=await fetch(url,opts);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(typeof d.detail==="string"?d.detail:"Request failed ("+r.status+")");return d}
+$("f").addEventListener("submit",async e=>{e.preventDefault();$("out").replaceChildren();$("s").textContent="Searching sources…";
+ try{const d=await api("/api/ask",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({question:$("q").value,product:$("p").value,country:$("c").value})});
+  $("s").textContent="Mode: "+d.mode+(d.grounded?"":" (not grounded)");
+  const a=el("div",undefined,"card");a.append(el("pre",d.answer));$("out").append(a);
+  d.citations.forEach(c=>{const x=el("div",undefined,"card muted");x.append(el("b","["+c.n+"] "+(c.title||"Untitled")),el("div",c.source_type+(c.published?" · "+c.published:"")));
+   x.append(el("div",c.snippet));if(/^https?:\/\//.test(c.url)){const l=el("a","Open source");l.href=c.url;l.target="_blank";l.rel="noopener noreferrer";x.append(l)}$("out").append(x)});
+ }catch(err){$("s").textContent=err.message}});
+$("add").addEventListener("click",async()=>{try{const d=await api("/api/ingest/text",{method:"POST",headers:{"Content-Type":"application/json","X-Admin-Key":$("k").value},
+ body:JSON.stringify({title:$("t").value,text:$("x").value,product:$("tp").value,country:$("tc").value,source_type:$("ty").value,url:$("tu").value})});
+ $("s").textContent=d.created?"Added ("+d.chunks+" chunks).":"Already in the knowledge base."}catch(err){$("s").textContent=err.message}});
+</script></main></body></html>

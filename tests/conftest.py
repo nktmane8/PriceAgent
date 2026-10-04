@@ -3,7 +3,7 @@ import sys
 import tempfile
 
 # Settings are read at import time, so set them before importing the app.
-os.environ.update(DATABASE_PATH=os.path.join(tempfile.mkdtemp(), "boot.db"), API_KEYS="testkey",
+os.environ.update(APP_ENV="test", DATABASE_PATH=os.path.join(tempfile.mkdtemp(), "boot.db"), API_KEYS="testkey",
                   ADMIN_KEY="adm", PUBLIC_URL="http://127.0.0.1:8000")
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 

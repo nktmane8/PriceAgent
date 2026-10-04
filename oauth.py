@@ -18,6 +18,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 import config
 import db
+from constants import (LOGIN_ACCOUNT_LIMIT, LOGIN_IP_LIMIT, LOGIN_WINDOW, PASSWORD_MIN, REGISTER_IP_LIMIT,
+                       TOKEN_IP_LIMIT)
 from util import client_ip
 
 router = APIRouter()
@@ -25,16 +27,24 @@ LOOPBACK = {"127.0.0.1", "localhost", "[::1]"}
 NO_STORE = {"Cache-Control": "no-store", "Pragma": "no-cache"}
 
 
-def sha(s): return hashlib.sha256(s.encode()).hexdigest()
-def b64url(b): return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+def sha(s):
+    """SHA-256 hex digest (tokens and codes are stored hashed)."""
+    return hashlib.sha256(s.encode()).hexdigest()
+
+
+def b64url(b):
+    """URL-safe base64 without padding (PKCE)."""
+    return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
 
 
 def hash_pw(pw):
+    """Salted scrypt hash of a password."""
     salt = os.urandom(16)
     return salt.hex() + ":" + hashlib.scrypt(pw.encode(), salt=salt, n=2**14, r=8, p=1).hex()
 
 
 def check_pw(pw, stored):
+    """Constant-time password check."""
     salt, h = stored.split(":")
     return hmac.compare_digest(hashlib.scrypt(pw.encode(), salt=bytes.fromhex(salt), n=2**14, r=8, p=1).hex(), h)
 
@@ -43,6 +53,7 @@ DUMMY_HASH = hash_pw("not-a-real-password")  # used so unknown emails take the s
 
 
 def valid_redirect(uri):
+    """Is this redirect URI allowed at registration (https or loopback http)?"""
     u = urlsplit(uri)
     if u.fragment or not u.netloc:
         return False
@@ -61,20 +72,24 @@ def redirect_ok(registered, given):
 
 
 def resources():
+    """Allowed token audiences (REST root and /mcp)."""
     return {config.PUBLIC_URL, config.PUBLIC_URL + "/mcp"}
 
 
 def oerr(code, desc, status=400):
+    """OAuth error JSON response (no-store)."""
     return JSONResponse({"error": code, "error_description": desc}, status, headers=NO_STORE)
 
 
 async def form(request):
+    """Parse an x-www-form-urlencoded body."""
     return {k: v[0] for k, v in parse_qs((await request.body()).decode(), keep_blank_values=True).items()}
 
 
 # ---- discovery ------------------------------------------------------------
 @router.get("/.well-known/oauth-authorization-server")
 def as_metadata():
+    """Authorization-server metadata (RFC 8414)."""
     u = config.PUBLIC_URL
     return {"issuer": u, "authorization_endpoint": u + "/oauth/authorize", "token_endpoint": u + "/oauth/token",
             "registration_endpoint": u + "/oauth/register", "revocation_endpoint": u + "/oauth/revoke",
@@ -85,6 +100,7 @@ def as_metadata():
 
 @router.get("/.well-known/oauth-protected-resource")
 def resource_metadata():  # for the REST API (the MCP SDK serves the /mcp variant itself)
+    """Protected-resource metadata for the REST API (RFC 9728)."""
     return {"resource": config.PUBLIC_URL, "authorization_servers": [config.PUBLIC_URL],
             "scopes_supported": [config.SCOPE], "bearer_methods_supported": ["header"]}
 
@@ -92,7 +108,8 @@ def resource_metadata():  # for the REST API (the MCP SDK serves the /mcp varian
 # ---- dynamic client registration (RFC 7591) ---------------------------------
 @router.post("/oauth/register")
 async def register(request: Request):
-    if db.rate_check("reg:" + client_ip(request), 20):
+    """Dynamic client registration (RFC 7591)."""
+    if db.rate_check("reg:" + client_ip(request), REGISTER_IP_LIMIT):
         return oerr("temporarily_unavailable", "Too many registrations.", 429)
     try:
         body = await request.json()
@@ -118,11 +135,13 @@ CSS = ("body{font:16px system-ui;max-width:420px;margin:8vh auto;padding:0 16px;
 
 
 def page(body, status=200):
+    """Render an HTML page with security headers."""
     return HTMLResponse(f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
                         f"<title>Price Comparison Agent</title><style>{CSS}</style>{body}", status, headers=SEC_HEADERS)
 
 
 def login_page(rid, client_name, msg="", status=200):
+    """Sign-in / create-account / deny page (all values HTML-escaped)."""
     e = html.escape  # escape everything that came from outside
     return page(f"<h1>Price Comparison Agent</h1><p><b>{e(client_name)}</b> wants to compare prices on your behalf "
                 f"(permission: <code>{e(config.SCOPE)}</code>).</p><p class=e>{e(msg)}</p>"
@@ -135,6 +154,7 @@ def login_page(rid, client_name, msg="", status=200):
 
 
 def back(uri, **params):
+    """Redirect to the client's redirect URI with extra query parameters."""
     u = urlsplit(uri)
     q = parse_qsl(u.query) + [(k, v) for k, v in params.items() if v]
     return RedirectResponse(urlunsplit(u._replace(query=urlencode(q))), 303)
@@ -142,6 +162,7 @@ def back(uri, **params):
 
 @router.get("/oauth/authorize")
 def authorize(request: Request):
+    """Start authorization: validate client, redirect URI and PKCE, then show the sign-in page."""
     q = dict(request.query_params)
     with db.conn() as c:
         cl = c.execute("SELECT * FROM oauth_clients WHERE client_id=?", (q.get("client_id", ""),)).fetchone()
@@ -166,6 +187,7 @@ def authorize(request: Request):
 
 @router.post("/oauth/authorize")
 async def authorize_post(request: Request):
+    """Handle sign-in or sign-up, then redirect back with a one-time code."""
     f = await form(request)
     with db.conn() as c:
         rq = c.execute("SELECT r.*, c.name FROM oauth_requests r JOIN oauth_clients c USING(client_id) "
@@ -183,11 +205,11 @@ async def authorize_post(request: Request):
         return finish(error="access_denied")
     email, pw = (f.get("email") or "").strip().lower()[:200], f.get("password") or ""
     # Brute-force protection: per IP and per account.
-    if db.rate_check("login-ip:" + client_ip(request), 30, 900) or db.rate_check("login-em:" + email, 10, 900):
+    if db.rate_check("login-ip:" + client_ip(request), LOGIN_IP_LIMIT, LOGIN_WINDOW) or db.rate_check("login-em:" + email, LOGIN_ACCOUNT_LIMIT, LOGIN_WINDOW):
         return login_page(rq["id"], rq["name"], "Too many attempts. Wait 15 minutes.", 429)
     uid = None
     if f.get("action") == "signup":
-        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or len(pw) < 10:
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or len(pw) < PASSWORD_MIN:
             return login_page(rq["id"], rq["name"], "Enter a valid email and a password of 10+ characters.", 400)
         try:
             with db.conn() as c:
@@ -212,6 +234,7 @@ async def authorize_post(request: Request):
 
 # ---- token endpoint ---------------------------------------------------------------
 def issue(client_id, user_id, scope, resource, family):
+    """Create and store an access + refresh token pair in a token family."""
     access, refresh, now = secrets.token_urlsafe(32), secrets.token_urlsafe(32), time.time()
     with db.conn() as c:
         c.execute("INSERT INTO oauth_tokens(hash,kind,family,client_id,user_id,scope,resource,expires_at) VALUES(?,?,?,?,?,?,?,?)",
@@ -224,8 +247,9 @@ def issue(client_id, user_id, scope, resource, family):
 
 @router.post("/oauth/token")
 async def token(request: Request):
+    """Token endpoint: authorization_code (PKCE) and refresh_token grants."""
     f = await form(request)
-    if db.rate_check("tok:" + client_ip(request), 120):
+    if db.rate_check("tok:" + client_ip(request), TOKEN_IP_LIMIT):
         return oerr("temporarily_unavailable", "Too many requests.", 429)
     gt = f.get("grant_type")
     if gt == "authorization_code":
@@ -256,6 +280,7 @@ async def token(request: Request):
 
 @router.post("/oauth/revoke")
 async def revoke(request: Request):
+    """Revoke a token (a refresh token revokes its whole family)."""
     t = (await form(request)).get("token", "")
     with db.tx() as c:
         row = c.execute("SELECT family, kind FROM oauth_tokens WHERE hash=?", (sha(t),)).fetchone()
@@ -271,3 +296,21 @@ def verify_access_token(t):
         r = c.execute("SELECT * FROM oauth_tokens WHERE hash=? AND kind='access' AND revoked=0 AND expires_at>?",
                       (sha(t), time.time())).fetchone()
     return dict(r) if r else None
+
+
+def delete_user(uid, password):
+    """Delete an account and everything tied to it. Returns 'ok', 'bad_password' or 'limited'."""
+    if db.rate_check(f"delacct:{uid}", 5, 900):
+        return "limited"
+    with db.conn() as c:
+        u = c.execute("SELECT pw_hash FROM users WHERE id=?", (uid,)).fetchone()
+    if not u or not check_pw(password, u["pw_hash"]):
+        return "bad_password"
+    mine = (f"user:{uid}", f"user:{uid}:insights")
+    with db.tx() as c:  # one transaction: all or nothing
+        c.execute("DELETE FROM oauth_tokens WHERE user_id=?", (uid,))
+        c.execute("DELETE FROM oauth_codes WHERE user_id=?", (uid,))
+        c.execute("DELETE FROM jobs WHERE principal IN (?,?)", mine)
+        c.execute("DELETE FROM usage WHERE principal IN (?,?)", mine)
+        c.execute("DELETE FROM users WHERE id=?", (uid,))
+    return "ok"

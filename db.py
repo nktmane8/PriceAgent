@@ -8,6 +8,8 @@ import time
 from contextlib import contextmanager
 
 import config
+from constants import (HISTORY_DAYS, HISTORY_RETENTION_DAYS, HOUR, JOB_RETENTION_DAYS, QUEUED, SEARCH_COST_USD,
+                       USAGE_RETENTION_DAYS)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, email TEXT UNIQUE NOT NULL, pw_hash TEXT NOT NULL, created_at REAL NOT NULL);
@@ -21,11 +23,14 @@ CREATE TABLE IF NOT EXISTS usage(id INTEGER PRIMARY KEY, principal TEXT NOT NULL
 CREATE INDEX IF NOT EXISTS ix_usage ON usage(principal, ts);
 CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, key TEXT NOT NULL, status TEXT NOT NULL, product TEXT, country TEXT, city TEXT, sites TEXT, principal TEXT, result TEXT, error TEXT, source TEXT, input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0, searches INTEGER DEFAULT 0, created_at REAL NOT NULL, updated_at REAL NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_jobs_key ON jobs(key, status);
+CREATE TABLE IF NOT EXISTS price_history(id INTEGER PRIMARY KEY, key TEXT NOT NULL, store TEXT NOT NULL, price REAL, effective_price REAL, currency TEXT, ts REAL NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_hist ON price_history(key, ts);
 """
 
 
 @contextmanager
 def conn():
+    """Open a SQLite connection (autocommit, row dicts, foreign keys on)."""
     c = sqlite3.connect(config.DB_PATH, timeout=30, isolation_level=None)  # autocommit
     c.row_factory = sqlite3.Row
     c.execute("PRAGMA foreign_keys=ON")
@@ -49,6 +54,7 @@ def tx():
 
 
 def init():
+    """Create tables and fail jobs left over from a previous process."""
     d = os.path.dirname(config.DB_PATH)
     if d:
         os.makedirs(d, exist_ok=True)
@@ -62,19 +68,21 @@ def init():
 
 # ---- cache -------------------------------------------------------------
 def cache_get(key):
+    """Read a fresh cached result or None."""
     with conn() as c:
         r = c.execute("SELECT value FROM cache WHERE key=? AND expires_at>?", (key, time.time())).fetchone()
     return json.loads(r["value"]) if r else None
 
 
 def cache_set(key, value):
+    """Save a result with the cache TTL."""
     with conn() as c:
         c.execute("INSERT OR REPLACE INTO cache(key,value,expires_at) VALUES(?,?,?)",
                   (key, json.dumps(value), time.time() + config.CACHE_TTL))
 
 
 # ---- rate limits (sliding window, persisted) -----------------------------
-def rate_check(principal, limit, window=3600):
+def rate_check(principal, limit, window=HOUR):
     """Record one use. Returns None if allowed, else minutes until allowed again."""
     now = time.time()
     with tx() as c:
@@ -90,7 +98,8 @@ def rate_check(principal, limit, window=3600):
 _JOB_FIELDS = {"status", "result", "error", "source", "input_tokens", "output_tokens", "searches"}
 
 
-def job_create(key, params, principal, status="queued"):
+def job_create(key, params, principal, status=QUEUED):
+    """Insert a new job row and return its secret id."""
     jid, now = secrets.token_urlsafe(16), time.time()
     with conn() as c:
         c.execute("INSERT INTO jobs(id,key,status,product,country,city,sites,principal,created_at,updated_at) "
@@ -101,6 +110,7 @@ def job_create(key, params, principal, status="queued"):
 
 
 def job_update(jid, **fields):
+    """Update allowed job fields (status, result, error, cost)."""
     assert set(fields) <= _JOB_FIELDS
     if "result" in fields:
         fields["result"] = json.dumps(fields["result"])
@@ -110,6 +120,7 @@ def job_update(jid, **fields):
 
 
 def job_get(jid):
+    """Load a job with its result parsed, or None."""
     with conn() as c:
         r = c.execute("SELECT * FROM jobs WHERE id=?", (jid,)).fetchone()
     if not r:
@@ -120,32 +131,78 @@ def job_get(jid):
 
 
 def job_active(key):
+    """Id of a queued/running job with this key, if any."""
     with conn() as c:
         r = c.execute("SELECT id FROM jobs WHERE key=? AND status IN ('queued','running') "
                       "ORDER BY created_at DESC LIMIT 1", (key,)).fetchone()
     return r["id"] if r else None
 
 
+# ---- price history -----------------------------------------------------
+def history_key(product, country, city):
+    """Key used to group price history (product + country + city)."""
+    return "|".join([product.lower(), country.lower(), city.lower()])
+
+
+def record_history(hkey, data):
+    """Save every offer of a fresh (not cached) price run. Product and prices only, no user data."""
+    now = time.time()
+    rows = [(hkey, r["site"], r["price"], r["effective_price"], data.get("currency", ""), now)
+            for r in data.get("results", []) if r.get("effective_price") is not None]
+    if rows:
+        with tx() as c:
+            c.executemany("INSERT INTO price_history(key,store,price,effective_price,currency,ts) VALUES(?,?,?,?,?,?)", rows)
+
+
+def history_summary(hkey, days=HISTORY_DAYS):
+    """Daily lows and the lowest price seen in the last N days."""
+    since = time.time() - days * 86400
+    with conn() as c:
+        daily = [dict(r) for r in c.execute(
+            "SELECT date(ts,'unixepoch') AS day, MIN(effective_price) AS low FROM price_history "
+            "WHERE key=? AND ts>? AND effective_price IS NOT NULL GROUP BY day ORDER BY day", (hkey, since))]
+        best = c.execute("SELECT store, effective_price, currency, date(ts,'unixepoch') AS date FROM price_history "
+                         "WHERE key=? AND ts>? AND effective_price IS NOT NULL ORDER BY effective_price ASC LIMIT 1",
+                         (hkey, since)).fetchone()
+    return {"days": daily, "lowest": ({"store": best["store"], "price": best["effective_price"],
+                                       "currency": best["currency"], "date": best["date"]} if best else None)}
+
+
 # ---- housekeeping --------------------------------------------------------
 def purge():
+    """Delete expired cache, codes, tokens, old jobs and history."""
     now = time.time()
     with tx() as c:
         c.execute("DELETE FROM cache WHERE expires_at<?", (now,))
-        c.execute("DELETE FROM usage WHERE ts<?", (now - 86400,))
+        c.execute("DELETE FROM usage WHERE ts<?", (now - USAGE_RETENTION_DAYS * 86400,))
         c.execute("DELETE FROM oauth_requests WHERE expires_at<?", (now,))
         c.execute("DELETE FROM oauth_codes WHERE expires_at<?", (now,))
         c.execute("DELETE FROM oauth_tokens WHERE expires_at<?", (now - 86400,))
-        c.execute("DELETE FROM jobs WHERE created_at<?", (now - 7 * 86400,))
+        c.execute("DELETE FROM jobs WHERE created_at<?", (now - JOB_RETENTION_DAYS * 86400,))
+        c.execute("DELETE FROM price_history WHERE ts<?", (now - HISTORY_RETENTION_DAYS * 86400,))
 
 
 def stats():
+    """Admin metrics: volume, latency, cache hit rate, failures, cost drivers."""
     with conn() as c:
         one = lambda q: c.execute(q).fetchone()[0]
         jobs = {r["status"]: r["n"] for r in c.execute("SELECT status, COUNT(*) n FROM jobs GROUP BY status")}
         s = one("SELECT COALESCE(SUM(searches),0) FROM jobs")
+        done = one("SELECT COUNT(*) FROM jobs WHERE status='done'")
+        cached = one("SELECT COUNT(*) FROM jobs WHERE status='done' AND source='cache'")
+        errors = [dict(r) for r in c.execute("SELECT error, COUNT(*) n FROM jobs WHERE status='error' "
+                                             "GROUP BY error ORDER BY n DESC LIMIT 5")]
+        by_type = {r["t"]: dict(jobs=r["jobs"], searches=r["s"]) for r in c.execute(
+            "SELECT substr(principal,1,instr(principal,':')-1) t, COUNT(*) jobs, COALESCE(SUM(searches),0) s "
+            "FROM jobs GROUP BY t")}
         return {"jobs": jobs, "users": one("SELECT COUNT(*) FROM users"),
                 "oauth_clients": one("SELECT COUNT(*) FROM oauth_clients"),
                 "cache_entries": one("SELECT COUNT(*) FROM cache"),
+                "price_history_rows": one("SELECT COUNT(*) FROM price_history"),
                 "input_tokens": one("SELECT COALESCE(SUM(input_tokens),0) FROM jobs"),
                 "output_tokens": one("SELECT COALESCE(SUM(output_tokens),0) FROM jobs"),
-                "web_searches": s, "search_cost_usd_estimate": round(s * 0.01, 2)}
+                "web_searches": s, "search_cost_usd_estimate": round(s * SEARCH_COST_USD, 2),
+                "cache_hit_rate": round(cached / done, 3) if done else None,
+                "avg_agent_seconds": round(one("SELECT COALESCE(AVG(updated_at-created_at),0) FROM jobs "
+                                               "WHERE status='done' AND source='agent'"), 1),
+                "top_errors": errors, "by_principal_type": by_type}
