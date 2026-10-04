@@ -31,6 +31,12 @@
   .price { font-size:1.25rem; font-weight:700; }
   .muted { color:var(--muted); font-size:.9rem; }
   .oos { color:#c0392b; font-size:.9rem; }
+  .history h2 { font-size:1rem; margin:0 0 4px; }
+  .history svg { display:block; width:100%; height:84px; margin-top:10px; overflow:visible; }
+  .history .spark { fill:none; stroke:var(--accent); stroke-width:3; stroke-linecap:round; stroke-linejoin:round; }
+  .history .grid { stroke:var(--line); stroke-width:1; }
+  .history circle { fill:var(--card); stroke:var(--accent); stroke-width:2; }
+  .caption { display:flex; justify-content:space-between; gap:12px; margin-top:4px; }
   ul { margin:8px 0; padding-left:20px; }
   a.open { display:inline-block; margin-top:6px; padding:8px 12px; font-size:.9rem; }
   #status { margin-top:16px; color:var(--muted); }
@@ -170,6 +176,72 @@ async function call(url, opts) {
 }
 let last = null; // the search the user submitted
 
+function svgEl(tag) {
+  return document.createElementNS("http://www.w3.org/2000/svg", tag);
+}
+
+function renderHistory(h) {
+  const c = el("div", undefined, "card history");
+  c.append(el("h2", "90-day price history"));
+  c.append(el("div", "Lowest recorded: " + money(h.lowest.price, h.lowest.currency) +
+    " at " + h.lowest.store + " (" + h.lowest.date + "), from " + h.days.length + " days of data.", "muted"));
+
+  const days = (Array.isArray(h.days) ? h.days : []).filter(d => typeof d.low === "number" && isFinite(d.low));
+  if (days.length > 1) {
+    const width = 240, height = 72, pad = 8;
+    const lows = days.map(d => d.low);
+    const min = Math.min(...lows), max = Math.max(...lows), span = max - min || 1;
+    const pts = days.map((d, i) => ({
+      day: d.day,
+      low: d.low,
+      x: pad + (i * (width - pad * 2)) / (days.length - 1),
+      y: height - pad - ((d.low - min) / span) * (height - pad * 2)
+    }));
+
+    const svg = svgEl("svg");
+    svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "Daily lowest effective price chart for the last 90 days.");
+    const title = svgEl("title");
+    title.textContent = "Daily lowest effective prices from " + days[0].day + " to " + days[days.length - 1].day;
+    svg.append(title);
+
+    [pad, height / 2, height - pad].forEach(y => {
+      const line = svgEl("line");
+      line.setAttribute("class", "grid");
+      line.setAttribute("x1", pad);
+      line.setAttribute("x2", width - pad);
+      line.setAttribute("y1", y.toFixed(1));
+      line.setAttribute("y2", y.toFixed(1));
+      svg.append(line);
+    });
+
+    const path = svgEl("path");
+    path.setAttribute("class", "spark");
+    path.setAttribute("d", pts.map((p, i) => (i ? "L" : "M") + p.x.toFixed(1) + " " + p.y.toFixed(1)).join(" "));
+    svg.append(path);
+
+    pts.forEach(p => {
+      const dot = svgEl("circle");
+      dot.setAttribute("cx", p.x.toFixed(1));
+      dot.setAttribute("cy", p.y.toFixed(1));
+      dot.setAttribute("r", "3");
+      const label = svgEl("title");
+      label.textContent = p.day + ": " + money(p.low, h.lowest.currency);
+      dot.append(label);
+      svg.append(dot);
+    });
+    c.append(svg);
+
+    const cap = el("div", undefined, "caption muted");
+    cap.append(el("span", days[0].day), el("span", days[days.length - 1].day));
+    c.append(cap);
+  } else {
+    c.append(el("div", "The chart appears after there are at least two fresh price checks for this product and region.", "muted"));
+  }
+  return c;
+}
+
 // The server runs slow searches in a background thread; we start a job and poll it.
 async function runJob(kind, message) {
   let job = await call("/api/jobs", {method: "POST", headers: {"Content-Type": "application/json"},
@@ -190,10 +262,7 @@ async function showHistory() {
   try {
     const p = new URLSearchParams({product: last.product, country: last.country, city: last.city || ""});
     const h = await call("/api/history?" + p);
-    if (h.lowest && h.days.length > 1) {
-      out.append(el("div", "Lowest price recorded here in the last 90 days: " + money(h.lowest.price, h.lowest.currency) +
-        " at " + h.lowest.store + " (" + h.lowest.date + "), from " + h.days.length + " days of data.", "card muted"));
-    }
+    if (h.lowest && h.days.length) out.append(renderHistory(h));
   } catch (e) { /* history is optional */ }
 }
 

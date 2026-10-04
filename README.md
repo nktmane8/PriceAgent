@@ -12,8 +12,8 @@ Type a product and your region. The agent uses Claude with web search to find th
 - **SQLite tables:** persistent cache (30 min), jobs with token/search cost, rate limits, users, OAuth data. Purge thread cleans up.
 - **OAuth 2.1** (PKCE, dynamic client registration, refresh rotation) + **remote MCP server** at `/mcp`; partner API keys also supported.
 - **Safety:** model output validated, `textContent` rendering, input validation, per-IP/user/key limits, Origin/Host checks, secrets from env only.
-- **Price history:** every fresh run is recorded; the page shows the lowest price seen in 90 days.
-- **Account deletion** (`POST /api/v1/account/delete`), richer admin metrics, offline tests (15), CI, weekly evals harness.
+- **Price history:** every fresh run is recorded; the page shows a 90-day sparkline and the lowest price seen.
+- **Account deletion** (`POST /api/v1/account/delete`), richer admin metrics, offline tests (16), CI, weekly evals harness.
 - **Ops:** `/healthz`, admin stats, Render blueprint.
 
 ## Run locally

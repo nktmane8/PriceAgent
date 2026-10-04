@@ -1,6 +1,6 @@
 # Status and TODO
 
-Last reviewed: 2026-10-01. Update this file in the same PR that changes any status.
+Last reviewed: 2026-10-04. Update this file in the same PR that changes any status.
 
 ## 1. What is developed
 | Area | Status | Where |
@@ -13,7 +13,7 @@ Last reviewed: 2026-10-01. Update this file in the same PR that changes any stat
 | Remote MCP server + OpenAPI + partner API keys | Done | `mcp_app.py`, `main.py` |
 | Location fallback (locale, GPS, typed) | Done | UI, `/api/locate` |
 | **Account deletion** | Done (new) | `POST /api/v1/account/delete` |
-| **Price history** (recorded per fresh run, 90-day lowest shown) | Done (new) | `price_history`, `/api/history` |
+| **Price history** (recorded per fresh run, 90-day lowest + sparkline shown) | Done | `price_history`, `/api/history`, UI |
 | **Metrics**: latency, cache hit rate, top errors, cost by caller type | Done (new, JSON) | `/api/admin/stats` |
 | **Evals harness** (invariant checks, optional price ranges, coverage report) | Done (new); dataset still needed | `evals/` |
 | Tests (16, offline) and CI; weekly evals workflow | Done | `tests/`, `.github/workflows/` |
@@ -28,7 +28,7 @@ Last reviewed: 2026-10-01. Update this file in the same PR that changes any stat
 | STORE_COVERAGE | Template + auto report from evals | Real data after the first eval run |
 | TERMS.md | Draft template | Lawyer review |
 | Metrics | JSON endpoint | Dashboard UI or Prometheus/Grafana |
-| Price history | Recording, API, one line in UI | Chart; alerts |
+| Price alerts | Price history exists | Target-price rules, notifications, unsubscribe |
 | Account lifecycle | Deletion | Email verification, password reset |
 
 ## 3. Missing (prioritised TODO)
@@ -42,6 +42,5 @@ Last reviewed: 2026-10-01. Update this file in the same PR that changes any stat
 | 6 | Metrics dashboard | M | Choose stack | Latency, hit rate, errors, cost per caller type visible without curl |
 | 7 | OAuth Client ID Metadata Documents | M | Careful SSRF handling when fetching client URLs | Client IDs that are https URLs accepted; fetch limited and cached |
 | 8 | Map picker (Leaflet + OSM) | S | None | User can pick a place on a map; same `country/city` fields filled |
-| 9 | Price-history chart | S | More data first | Sparkline per product |
-| 10 | Lawyer-reviewed TERMS + final PRIVACY | S | Legal advice | Published URLs linked from the sign-in page |
-| 11 | No-AI provider mode (shopping-search API) | M | Free API key | `PROVIDER=serper` passes the offline tests; cost per comparison below one cent |
+| 9 | Lawyer-reviewed TERMS + final PRIVACY | S | Legal advice | Published URLs linked from the sign-in page |
+| 10 | No-AI provider mode (shopping-search API) | M | Free API key | `PROVIDER=serper` passes the offline tests; cost per comparison below one cent |

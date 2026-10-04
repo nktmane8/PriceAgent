@@ -21,6 +21,18 @@ RESULT = {"product": "Phone X", "region": "Pune, India", "currency": "INR",
                       {"site": "b.in", "store_type": "local", "location": "Pune", "price": 95, "effective_price": 95,
                        "offers": [], "in_stock": True, "url": "javascript:alert(1)"}],
           "best_deal": {"site": "a.in", "effective_price": 90, "why": "lowest"}, "notes": ""}
+INSIGHTS = {"product": "Phone X", "region": "Pune, India", "currency": "INR", "verdict": "Good for most buyers.",
+            "pros": ["solid battery"], "cons": ["slow charging"],
+            "user_rating": {"average": 4.2, "count": 1200, "where": "Example Store"},
+            "reviews": [{"source": "Example Paper", "source_type": "publication", "reviewer": "A Reviewer",
+                         "rating": "4/5", "summary": "Well balanced for the price.", "date": "2026-01-01",
+                         "url": "https://example.com/review", "basis": "full_page", "sponsored_or_affiliate": False},
+                        {"source": "No Link Blog", "source_type": "publication", "summary": "No source URL.",
+                         "url": ""}],
+            "alternatives": [{"name": "Phone Y", "why_consider": "Better camera.", "better_at": ["camera"],
+                              "trade_off": "Costs more.", "approx_price": 120, "currency": "INR",
+                              "url": "javascript:alert(1)"}],
+            "notes": ""}
 
 
 @pytest.fixture
@@ -43,5 +55,10 @@ def client(_session_client, tmp_path, monkeypatch, calls):
     def fake(product, country, city, sites):  # no network: stand-in for the real agent
         calls.append(product)
         return agent.clean(RESULT), {"input_tokens": 10, "output_tokens": 5, "searches": 2}
+
+    def fake_insights(product, country, city, sites):  # no network: stand-in for the real insights agent
+        return agent.clean_insights(INSIGHTS), {"input_tokens": 6, "output_tokens": 4, "searches": 1}
+
     monkeypatch.setattr(agent, "run_agent", fake)
+    monkeypatch.setattr(agent, "run_insights", fake_insights)
     return _session_client
