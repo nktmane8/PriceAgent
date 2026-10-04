@@ -19,6 +19,7 @@ Request body: `{"product": "iPhone 15 128GB Black", "country": "India", "city": 
 Job response: `{"job_id", "status": "queued|running|done|error", "result"?, "cached"?, "error"?}`.
 Result: `{product, region, currency, results:[{site, store_type, location, price, effective_price, offers[], in_stock, url}], best_deal, notes}`.
 Errors: 401 auth, 422 bad input, 429 rate limit (message has minutes to wait), 404 unknown job.
+Partner API keys are read from the comma-separated `API_KEYS` environment variable. Generate a random 20+ character key, replace the old value in `.env` or your host dashboard, restart the service, then send it in `X-API-Key`.
 
 ```bash
 curl -X POST $URL/api/v1/compare -H "X-API-Key: $KEY" -H "Content-Type: application/json" \

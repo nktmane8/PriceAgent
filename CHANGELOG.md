@@ -1,4 +1,7 @@
 # Changelog
+## 2.5.0
+- Added a 90-day price-history sparkline in the web UI and refreshed the roadmap.
+- Clarified API key generation and rotation guidance without committing secrets.
 ## 2.4.0
 - Added `apps/price-agent-rag` and `apps/price-agent-plain` (with a Spring Boot 4.1 collector), CI for them, `docs/VARIANTS.md`.
 ## 2.3.0

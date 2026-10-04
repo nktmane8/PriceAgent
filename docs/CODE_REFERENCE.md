@@ -141,11 +141,11 @@ Remote MCP server (streamable HTTP) protected by our OAuth tokens.
 
 | Function / class | Route or role | What it does | Line |
 |---|---|---|---|
-| `class DbTokenVerifier` |  | Tells the MCP SDK whether a bearer token is valid (checks DB, expiry, audience). | 22 |
-| `def _principal()` |  | Identify the calling user from the verified token. | 43 |
-| `async def compare_prices(product, country, city)` | MCP tool | Compare live prices for an EXACT product variant across online and local stores in a region. | 50 |
-| `async def get_reviews_and_alternatives(product, country, city)` | MCP tool | Find real reviews (newspapers/publications, video reviewers, users) with source links, pros and cons, | 71 |
-| `async def get_comparison_result(job_id)` | MCP tool | Fetch the result of a comparison started by compare_prices (status: queued, running, done, error). | 91 |
+| `class DbTokenVerifier` |  | Tells the MCP SDK whether a bearer token is valid (checks DB, expiry, audience). | 23 |
+| `def _principal()` |  | Identify the calling user from the verified token. | 44 |
+| `async def compare_prices(product, country, city)` | MCP tool | Compare live prices for an EXACT product variant across online and local stores in a region. | 51 |
+| `async def get_reviews_and_alternatives(product, country, city)` | MCP tool | Find real reviews (newspapers/publications, video reviewers, users) with source links, pros and cons, | 72 |
+| `async def get_comparison_result(job_id)` | MCP tool | Fetch the result of a comparison started by compare_prices (status: queued, running, done, error). | 92 |
 
 ## `mcp_server.py`
 

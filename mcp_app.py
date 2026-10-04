@@ -1,5 +1,5 @@
 """Remote MCP server (streamable HTTP) protected by our OAuth tokens.
-Tools: compare_prices (waits up to JOB_WAIT s, else returns a job id) and get_comparison_result."""
+Tools: compare_prices, get_reviews_and_alternatives and get_comparison_result."""
 import json
 from urllib.parse import urlsplit
 
@@ -16,6 +16,7 @@ import config
 import db
 import jobs
 import oauth
+from constants import KIND_INSIGHTS, KIND_PRICES
 from util import validate
 
 
@@ -52,7 +53,27 @@ async def compare_prices(product: str, country: str, city: str = "") -> str:
     Returns JSON with per-store price, effective price, offers, stock and URL plus a best deal.
     If it is still running after ~50 s it returns a job_id; call get_comparison_result with it.
     Prices change quickly; verify on the store before buying."""
-    params = {"product": product.strip(), "country": country.strip(), "city": city.strip(), "sites": []}
+    params = {"product": product.strip(), "country": country.strip(), "city": city.strip(), "sites": [], "kind": KIND_PRICES}
+    err = validate(params)
+    if err:
+        return json.dumps({"error": err})
+    me = _principal()
+
+    def run():
+        try:
+            jid = jobs.submit(params, me, config.USER_RATE_LIMIT)
+        except jobs.RateLimited as e:
+            return {"error": f"Hourly limit reached. Try again in about {e.minutes} minutes."}
+        return jobs.view(jobs.wait(jid, config.JOB_WAIT))
+    return json.dumps(await anyio.to_thread.run_sync(run))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True))
+async def get_reviews_and_alternatives(product: str, country: str, city: str = "") -> str:
+    """Find real reviews (newspapers/publications, video reviewers, users) with source links, pros and cons,
+    a balanced buy/no-buy verdict and similar products reviewers rate better.
+    If it is still running after ~50 s it returns a job_id; call get_comparison_result with it."""
+    params = {"product": product.strip(), "country": country.strip(), "city": city.strip(), "sites": [], "kind": KIND_INSIGHTS}
     err = validate(params)
     if err:
         return json.dumps({"error": err})
