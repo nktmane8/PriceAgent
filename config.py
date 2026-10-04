@@ -39,10 +39,10 @@ def _int(name, default):
 
 PRODUCTION_LIKE = APP_ENV in ("staging", "production")
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-MODEL = os.environ.get("MODEL", "gpt-5.4")
+MODEL = os.environ.get("MODEL", "gpt-5.6-sol")
 MAX_SEARCHES = _int("MAX_SEARCHES", 15)                     # web searches per price comparison
 MAX_INSIGHT_SEARCHES = _int("MAX_INSIGHT_SEARCHES", 10)     # searches for reviews + alternatives
-MAX_PAUSE_LOOPS = _int("MAX_PAUSE_LOOPS", 4)                # pause_turn continuation rounds
+MAX_PAUSE_LOOPS = _int("MAX_PAUSE_LOOPS", 4)                # retained for config compatibility; Responses handles tool continuation
 RATE_LIMIT = _int("RATE_LIMIT", 5)                          # web users: comparisons per IP per hour
 USER_RATE_LIMIT = _int("USER_RATE_LIMIT", 30)               # OAuth users: per user per hour
 KEY_RATE_LIMIT = _int("KEY_RATE_LIMIT", 60)                 # API keys: per key per hour
