@@ -1,0 +1,14 @@
+{
+  "name": "price-agent-plain-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "seed": "node src/seed.js",
+    "test": "node --test --disable-warning=ExperimentalWarning \"test/*.test.js\""
+  },
+  "dependencies": { "express": "^5.1.0" }
+}

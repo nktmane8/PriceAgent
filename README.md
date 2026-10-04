@@ -72,3 +72,6 @@ Tests (no API key needed): `pip install -r requirements-dev.txt && python -m pyt
 - Price history only has data for products people searched on this deployment.
 - The OAuth server is hand-written and has no email verification or password reset yet. Get it reviewed before a public launch (`docs/SECURITY.md`).
 - One instance only; SQLite and in-process threads do not scale out.
+
+## Apps in this repository
+`apps/price-agent-rag` (AI + RAG, no paid key), `apps/price-agent-plain` (React, Node.js, Python and Spring Boot collectors, no AI). See `docs/VARIANTS.md` for how they differ from the app at the repository root. CI for them is in `.github/workflows/apps-ci.yml`.

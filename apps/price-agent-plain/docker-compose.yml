@@ -1,0 +1,11 @@
+services:
+  app:
+    build: .
+    ports: ["3000:3000"]
+    environment:
+      ADMIN_KEY: ${ADMIN_KEY:?set ADMIN_KEY in .env}
+      INGEST_KEY: ${INGEST_KEY:?set INGEST_KEY in .env}
+      SEED_ON_EMPTY: "true"      # demo data on first run; set false for real use
+    volumes: ["data:/data"]
+volumes:
+  data:

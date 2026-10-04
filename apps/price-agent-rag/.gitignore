@@ -1,0 +1,10 @@
+.env
+env/.env.local
+env/.env.staging
+env/.env.production
+data/
+*.db
+*.db-*
+__pycache__/
+.pytest_cache/
+.venv/

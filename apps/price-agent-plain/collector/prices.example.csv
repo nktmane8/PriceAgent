@@ -1,0 +1,2 @@
+product,store,store_type,country,city,price,currency,instant_discount,discount_note,in_stock,url
+Example Phone 128GB,Example Shop,local,India,Pune,29999,INR,1000,Bank offer shown at checkout,true,https://shop.example/p

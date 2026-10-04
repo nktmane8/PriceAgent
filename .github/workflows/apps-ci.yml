@@ -1,0 +1,49 @@
+name: Apps CI (RAG, plain, Spring collector)
+on:
+  push:
+    branches: [main]
+    paths: ["apps/**", ".github/workflows/apps-ci.yml"]
+  pull_request:
+    paths: ["apps/**", ".github/workflows/apps-ci.yml"]
+jobs:
+  rag:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: apps/price-agent-rag}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: python -m pytest -q tests
+  plain-api:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: apps/price-agent-plain/api}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - run: npm ci && npm test
+  plain-web:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: apps/price-agent-plain/web}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - run: npm ci && npm run build
+  plain-collector-python:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: apps/price-agent-plain}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install pytest && python -m pytest -q collector/tests
+  plain-collector-spring:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: apps/price-agent-plain/collector-spring}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: "21", cache: maven}
+      - run: mvn -B -ntp verify

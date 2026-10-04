@@ -1,0 +1,18 @@
+name: Plain app - collect prices (daily)
+on:
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    env:
+      API_URL: ${{ secrets.PLAIN_API_URL }}
+      INGEST_KEY: ${{ secrets.PLAIN_INGEST_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - if: env.API_URL != '' && env.INGEST_KEY != ''
+        uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - if: env.API_URL != '' && env.INGEST_KEY != ''
+        run: python apps/price-agent-plain/collector/collect.py apps/price-agent-plain/collector/sources.json   # commit your own sources.json first
