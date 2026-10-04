@@ -17,7 +17,7 @@ Switch environment: `APP_ENV=staging uvicorn main:app`.
 | `APP_ENV` | no | development | development | test | staging | production |
 | `LOG_LEVEL` | no | INFO | DEBUG | WARNING | INFO | INFO |
 | `OPENAI_API_KEY` | **yes** | none (required) | shell/.env | not needed | dashboard | dashboard |
-| `MODEL` | no | gpt-5.4 | same | same | same | same |
+| `MODEL` | no | gpt-5.6-sol | same | same | same | same |
 | `MAX_SEARCHES` | no | 15 | 5 | 1 | 8 | 15 |
 | `MAX_INSIGHT_SEARCHES` | no | 10 | 4 | 1 | 6 | 10 |
 | `MAX_PAUSE_LOOPS` | no | 4 | default | default | default | default |
