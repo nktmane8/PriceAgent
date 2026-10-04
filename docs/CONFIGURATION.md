@@ -37,7 +37,7 @@ Switch environment: `APP_ENV=staging uvicorn main:app`.
 | `PORT` | no | set by host | n/a | n/a | host | host |
 
 ## Start-up checks (`config.problems()`)
-Always: missing `ANTHROPIC_API_KEY`. Staging/production also: `PUBLIC_URL` not https; `DATABASE_PATH` not absolute; `NOMINATIM_CONTACT` unset; `API_KEYS` or `ADMIN_KEY` shorter than 20 characters. They stop the app there; elsewhere they log warnings.
+Always: missing `OPENAI_API_KEY`. Staging/production also: `PUBLIC_URL` not https; `DATABASE_PATH` not absolute; `NOMINATIM_CONTACT` unset; `API_KEYS` or `ADMIN_KEY` shorter than 20 characters. They stop the app there; elsewhere they log warnings.
 
 ## Global constants (`constants.py`)
 Not environment-specific; change only with a code review.
