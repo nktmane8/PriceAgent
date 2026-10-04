@@ -39,10 +39,10 @@ def _int(name, default):
 
 PRODUCTION_LIKE = APP_ENV in ("staging", "production")
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-MODEL = os.environ.get("MODEL", "claude-sonnet-5-5")
+MODEL = os.environ.get("MODEL", "gpt-5.6-sol")
 MAX_SEARCHES = _int("MAX_SEARCHES", 15)                     # web searches per price comparison
 MAX_INSIGHT_SEARCHES = _int("MAX_INSIGHT_SEARCHES", 10)     # searches for reviews + alternatives
-MAX_PAUSE_LOOPS = _int("MAX_PAUSE_LOOPS", 4)                # pause_turn continuation rounds
+MAX_PAUSE_LOOPS = _int("MAX_PAUSE_LOOPS", 4)                # retained for config compatibility; Responses handles tool continuation
 RATE_LIMIT = _int("RATE_LIMIT", 5)                          # web users: comparisons per IP per hour
 USER_RATE_LIMIT = _int("USER_RATE_LIMIT", 30)               # OAuth users: per user per hour
 KEY_RATE_LIMIT = _int("KEY_RATE_LIMIT", 60)                 # API keys: per key per hour
@@ -61,8 +61,8 @@ EXTRA_ORIGINS = [o for o in os.environ.get("EXTRA_ORIGINS", "").split(",") if o]
 def problems() -> list[str]:
     """Configuration mistakes. Fatal in staging/production, warnings elsewhere."""
     p = []
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        p.append("ANTHROPIC_API_KEY is not set")
+    if not os.environ.get("OPENAI_API_KEY"):
+        p.append("OPENAI_API_KEY is not set")
     if PRODUCTION_LIKE:
         if not PUBLIC_URL.startswith("https://"):
             p.append("PUBLIC_URL must be an https URL")

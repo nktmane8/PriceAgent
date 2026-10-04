@@ -1,10 +1,11 @@
-"""Calls Claude with web search and validates what comes back."""
+"""Calls OpenAI with web search and validates what comes back."""
 import json
 import math
 import os
 import re
 
-import anthropic
+import openai
+from openai import OpenAI
 
 import config
 from constants import MAX_ALTERNATIVES, MAX_OFFERS, MAX_RESULTS, MAX_REVIEWS, REVIEW_SOURCE_TYPES
@@ -141,32 +142,32 @@ def clean_insights(data) -> dict:
 
 
 def _converse(system, prompt, max_uses, max_tokens):
-    """Shared loop: call Claude with web search, continue paused turns, add up usage. Returns (text, usage)."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY")  # never hardcoded
+    """Call OpenAI Responses API with web search and return text plus usage."""
+    api_key = os.environ.get("OPENAI_API_KEY")  # never hardcoded
     if not api_key:
-        raise AgentError("Server is missing ANTHROPIC_API_KEY.")
-    client = anthropic.Anthropic(api_key=api_key, timeout=120.0)
-    messages = [{"role": "user", "content": prompt}]
-    tools = [{"type": "web_search_20250305", "name": "web_search", "max_uses": max_uses}]
+        raise AgentError("Server is missing OPENAI_API_KEY.")
+    client = OpenAI(api_key=api_key, timeout=120.0)
     usage = {"input_tokens": 0, "output_tokens": 0, "searches": 0}
-    response = None
     try:
-        for _ in range(config.MAX_PAUSE_LOOPS):
-            response = client.messages.create(model=config.MODEL, max_tokens=max_tokens, system=system,
-                                              tools=tools, messages=messages)
-            u = response.usage
-            usage["input_tokens"] += getattr(u, "input_tokens", 0) or 0
-            usage["output_tokens"] += getattr(u, "output_tokens", 0) or 0
-            usage["searches"] += getattr(getattr(u, "server_tool_use", None), "web_search_requests", 0) or 0
-            if response.stop_reason != "pause_turn":
-                break
-            messages.append({"role": "assistant", "content": response.content})  # let a paused turn continue
-    except anthropic.RateLimitError:
+        response = client.responses.create(
+            model=config.MODEL,
+            instructions=system,
+            input=prompt,
+            tools=[{"type": "web_search"}],
+            max_output_tokens=max_tokens,
+        )
+        u = response.usage
+        usage["input_tokens"] = getattr(u, "input_tokens", 0) or 0
+        usage["output_tokens"] = getattr(u, "output_tokens", 0) or 0
+        usage["searches"] = sum(
+            1 for item in (response.output or [])
+            if getattr(item, "type", None) == "web_search_call"
+        )
+        return response.output_text, usage
+    except openai.RateLimitError:
         raise AgentError("The AI service is busy. Try again shortly.")
-    except anthropic.APIError as e:
+    except openai.APIError as e:
         raise AgentError(f"AI service error: {getattr(e, 'message', 'unknown')}")
-    return "".join(b.text for b in response.content if b.type == "text"), usage
-
 
 def _parse(text, cleaner):
     """Extract JSON from model text and run the cleaner; raise AgentError if invalid."""
