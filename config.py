@@ -39,7 +39,7 @@ def _int(name, default):
 
 PRODUCTION_LIKE = APP_ENV in ("staging", "production")
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-MODEL = os.environ.get("MODEL", "claude-sonnet-5-5")
+MODEL = os.environ.get("MODEL", "gpt-5.4")
 MAX_SEARCHES = _int("MAX_SEARCHES", 15)                     # web searches per price comparison
 MAX_INSIGHT_SEARCHES = _int("MAX_INSIGHT_SEARCHES", 10)     # searches for reviews + alternatives
 MAX_PAUSE_LOOPS = _int("MAX_PAUSE_LOOPS", 4)                # pause_turn continuation rounds
@@ -61,8 +61,8 @@ EXTRA_ORIGINS = [o for o in os.environ.get("EXTRA_ORIGINS", "").split(",") if o]
 def problems() -> list[str]:
     """Configuration mistakes. Fatal in staging/production, warnings elsewhere."""
     p = []
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        p.append("ANTHROPIC_API_KEY is not set")
+    if not os.environ.get("OPENAI_API_KEY"):
+        p.append("OPENAI_API_KEY is not set")
     if PRODUCTION_LIKE:
         if not PUBLIC_URL.startswith("https://"):
             p.append("PUBLIC_URL must be an https URL")
