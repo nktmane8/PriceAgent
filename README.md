@@ -21,7 +21,7 @@ Settings come from `env/.env.<APP_ENV>` (default `development`); secrets go in a
 ```bash
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-export OPENAI_API_KEY="sk-..."                    # PowerShell: $env:ANTHROPIC_API_KEY="sk-ant-..."
+export OPENAI_API_KEY="sk-..."                    # PowerShell: $env:OPENAI_API_KEY="sk-..."
 uvicorn main:app --reload
 ```
 Open http://127.0.0.1:8000, enter a product, confirm the country, click **Compare** (30-60 s). The database is created at `data/price-agent.db`.
@@ -47,7 +47,7 @@ Tests (no API key needed): `pip install -r requirements-dev.txt && python -m pyt
 | `OPENAI_API_KEY` | required | Secret |
 | `PUBLIC_URL` | `http://127.0.0.1:8000` | Public https URL; OAuth issuer; must be exact |
 | `DATABASE_PATH` | `data/price-agent.db` | SQLite file (put on the persistent disk) |
-| `MODEL` | `gpt-5.4` | Model |
+| `MODEL` | `gpt-5.6-sol` | Model |
 | `MAX_SEARCHES` | 15 | Searches per price comparison |
 | `MAX_INSIGHT_SEARCHES` | 10 | Searches for reviews and alternatives |
 | `WORKERS` | 4 | Background threads |
