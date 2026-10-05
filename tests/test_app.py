@@ -46,6 +46,15 @@ def test_rate_limit_is_persisted(client, monkeypatch):
     assert r.status_code == 429
 
 
+def test_web_price_comparison_requires_oauth(client):
+    override = main.api.dependency_overrides.pop(main.web_user)
+    try:
+        assert client.post("/api/jobs", json=BODY).status_code == 401
+        assert client.get("/api/jobs/not-owned").status_code == 401
+    finally:
+        main.api.dependency_overrides[main.web_user] = override
+
+
 def test_api_key_and_auth_required(client):
     assert client.post("/api/v1/compare", json=BODY).status_code == 401
     r = client.post("/api/v1/compare", json=BODY, headers={"X-API-Key": "testkey"})
