@@ -15,6 +15,7 @@ class _Conn:
         self.raw.close()
 
 import config
+from product_identity import normalize
 from constants import HISTORY_DAYS, HISTORY_RETENTION_DAYS, HOUR, JOB_RETENTION_DAYS, QUEUED, SEARCH_COST_USD, USAGE_RETENTION_DAYS
 
 SCHEMA=[
@@ -121,7 +122,9 @@ def product_get(canonical_key):
         r=c.execute("SELECT * FROM products WHERE canonical_key=%s",(canonical_key,)).fetchone()
     return dict(r) if r else None
 
-def history_key(product,country,city):return "|".join([product.lower(),country.lower(),city.lower()])
+def history_key(product,country,city):
+    identity = normalize(product)
+    return "|".join([identity["canonical_key"], country.lower(), city.lower()])
 
 def record_history(hkey,data):
     now=time.time();rows=[(hkey,r["site"],r["price"],r["effective_price"],data.get("currency",""),now) for r in data.get("results",[]) if r.get("effective_price") is not None]
