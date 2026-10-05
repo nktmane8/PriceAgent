@@ -92,6 +92,13 @@ def partner(key: str | None = Depends(api_key_header), bearer: str | None = Depe
         return "key:" + hashlib.sha256(key.encode()).hexdigest()[:12], config.KEY_RATE_LIMIT
     raise HTTPException(401, "Sign in with OAuth or send a valid X-API-Key.", headers=CHALLENGE)
 
+def web_user(bearer: str | None = Depends(oauth2)):
+    """Require a valid OAuth user for first-party browser price comparisons."""
+    row = oauth.verify_access_token(bearer) if bearer else None
+    if not row or row["resource"] not in (None, "", config.PUBLIC_URL):
+        raise HTTPException(401, "Sign in with OAuth to compare prices.", headers=CHALLENGE)
+    return "user:" + str(row["user_id"]), config.USER_RATE_LIMIT
+
 
 @api.middleware("http")
 async def security_headers(request, call_next):
@@ -126,17 +133,15 @@ def current_user(bearer: str | None = Depends(oauth2)):
 
 
 @api.post("/api/jobs", include_in_schema=False)
-def create_job(req: CompareRequest, who=Depends(partner)):
-    """Legacy web endpoint: now requires OAuth instead of anonymous IP-based access."""
+def create_job(req: CompareRequest, who=Depends(web_user)):
+    """Legacy web endpoint: requires OAuth login."""
     principal, limit = who
-    if principal.startswith("key:"):
-        raise HTTPException(403, "This endpoint is for signed-in web users. Use /api/v1/compare for API keys.")
     jid = start(params_of(req), principal, limit)
     return respond(db.job_get(jid))
 
 
 @api.get("/api/jobs/{job_id}", include_in_schema=False)
-def read_job(job_id: str, who=Depends(partner)):
+def read_job(job_id: str, who=Depends(web_user)):
     """Legacy web polling endpoint: requires OAuth and caller-owned job."""
     principal, _ = who
     job = db.job_get(job_id)
