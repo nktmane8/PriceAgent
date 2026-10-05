@@ -617,7 +617,7 @@ form.addEventListener("submit", async e => {
 $("ins").addEventListener("click", async () => {
   $("ins").disabled = true; status.className = "";
   try {
-    trackEvent("view_item", {item_name:last.product});
+    trackEvent("insight_view", {item_name:last.product});
     const job = await runJob("insights", "Reading reviews and looking for similar products… up to a minute.");
     status.textContent = "";
     renderInsights(job.result);
