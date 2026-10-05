@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults: {run: {working-directory: apps/price-agent-rag}}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
       - run: pip install -r requirements.txt -r requirements-dev.txt
@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults: {run: {working-directory: apps/price-agent-plain/api}}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with: {node-version: 22}
       - run: npm ci && npm test
@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults: {run: {working-directory: apps/price-agent-plain/web}}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with: {node-version: 22}
       - run: npm ci && npm run build
@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults: {run: {working-directory: apps/price-agent-plain}}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
       - run: pip install pytest && python -m pytest -q collector/tests
@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults: {run: {working-directory: apps/price-agent-plain/collector-spring}}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: "21", cache: maven}
       - run: mvn -B -ntp verify

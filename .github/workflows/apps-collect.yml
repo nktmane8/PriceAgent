@@ -10,7 +10,7 @@ jobs:
       API_URL: ${{ secrets.PLAIN_API_URL }}
       INGEST_KEY: ${{ secrets.PLAIN_INGEST_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - if: env.API_URL != '' && env.INGEST_KEY != ''
         uses: actions/setup-python@v5
         with: {python-version: "3.12"}
