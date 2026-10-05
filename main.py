@@ -27,6 +27,7 @@ from product_identity import normalize
 import db
 import jobs
 import oauth
+import analytics
 from constants import KIND_INSIGHTS, KIND_PRICES, MAX_SITES
 from mcp_app import mcp
 from util import client_ip, validate
