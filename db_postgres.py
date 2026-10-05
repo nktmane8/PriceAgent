@@ -3,6 +3,17 @@ import json, secrets, time
 from contextlib import contextmanager
 import psycopg
 from psycopg.rows import dict_row
+
+class _Conn:
+    def __init__(self, raw): self.raw = raw
+    def execute(self, sql, params=None): return self.raw.execute(sql.replace("?", "%s"), params)
+    def executemany(self, sql, params): return self.raw.executemany(sql.replace("?", "%s"), params)
+    def __enter__(self): return self
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type: self.raw.rollback()
+        else: self.raw.commit()
+        self.raw.close()
+
 import config
 from constants import HISTORY_DAYS, HISTORY_RETENTION_DAYS, HOUR, JOB_RETENTION_DAYS, QUEUED, SEARCH_COST_USD, USAGE_RETENTION_DAYS
 
@@ -24,13 +35,15 @@ SCHEMA=[
 
 @contextmanager
 def conn():
-    with psycopg.connect(config.DATABASE_URL,row_factory=dict_row) as c: yield c
+    with psycopg.connect(config.DATABASE_URL,row_factory=dict_row) as raw:
+        yield _Conn(raw)
 
 @contextmanager
 def tx():
-    with psycopg.connect(config.DATABASE_URL,row_factory=dict_row) as c:
-        try: yield c; c.commit()
-        except BaseException: c.rollback(); raise
+    with psycopg.connect(config.DATABASE_URL,row_factory=dict_row) as raw:
+        c=_Conn(raw)
+        try: yield c; raw.commit()
+        except BaseException: raw.rollback(); raise
 
 def init():
     with psycopg.connect(config.DATABASE_URL) as c:
