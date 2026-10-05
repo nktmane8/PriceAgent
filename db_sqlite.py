@@ -26,7 +26,7 @@ CREATE INDEX IF NOT EXISTS ix_jobs_key ON jobs(key, status);
 CREATE TABLE IF NOT EXISTS price_history(id INTEGER PRIMARY KEY, key TEXT NOT NULL, store TEXT NOT NULL, price REAL, effective_price REAL, currency TEXT, ts REAL NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_hist ON price_history(key, ts);
 CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY AUTOINCREMENT, canonical_key TEXT UNIQUE NOT NULL, display_name TEXT NOT NULL, brand TEXT, variant TEXT, storage TEXT, color TEXT, created_at REAL NOT NULL, updated_at REAL NOT NULL);
-CREATE INDEX IF NOT EXISTS ix_products_brand ON products(brand);
+CREATE INDEX IF NOT EXISTS ix_products_brand ON products(brand);\nCREATE TABLE IF NOT EXISTS analytics_events(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,product TEXT,store TEXT,metadata TEXT,ts REAL NOT NULL);\nCREATE INDEX IF NOT EXISTS ix_analytics_ts ON analytics_events(ts);\nCREATE INDEX IF NOT EXISTS ix_analytics_name ON analytics_events(name);
 """
 
 
