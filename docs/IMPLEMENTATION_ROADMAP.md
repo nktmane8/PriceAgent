@@ -4,13 +4,32 @@
 
 **Goal:** Transform PriceAgent from a Python/FastAPI prototype into a production-grade Java 21/Spring Boot platform.
 
-**Timeline:** 26 weeks (~6 months)  
+**Timeline:** 26 weeks (~6 months) after the Python release gate  
 **Phases:** 11 (4 must-ship, 3 should-ship, 4 nice-to-have)  
 **Success Metric:** Production-ready system serving 100k daily active users with 99.5% uptime.
 
 ---
 
-## Phase 1: Java Foundation (Weeks 1-2)
+## Revised sequencing (2026-10-05)
+
+The original 26-week plan started Java too early. **Do not start Phase 1 Java Foundation yet.**
+
+First complete a Python stabilization gate:
+
+1. Provision PostgreSQL + Valkey/Key Value + dedicated worker.
+2. Verify distributed job execution and idempotency.
+3. Verify OAuth browser flow, REST authorization and MCP authorization with real clients.
+4. Run provider failure/recovery tests.
+5. Complete backup/restore and load-test baselines.
+6. Freeze REST/OpenAPI, OAuth, MCP and job contracts.
+7. Tag a stable Python release candidate.
+
+Only then start the Java 21 modular-monolith phases below. The Python implementation becomes the behavioral reference and regression oracle.
+
+See docs/RELEASE_READINESS.md for the authoritative gate.
+
+---
+## Phase 1: Java Foundation (after Python release gate)
 
 ### Objectives
 - [ ] Create Java 21 + Spring Boot project scaffold
