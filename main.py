@@ -103,8 +103,15 @@ async def security_headers(request, call_next):
 
 
 def respond(job):
-    """Job to JSON response: 200 when finished, 202 while queued or running."""
-    return JSONResponse(jobs.view(job), status_code=200 if job["status"] in FINISHED else 202)
+    """Map job lifecycle states to honest HTTP responses."""
+    body = jobs.view(job)
+    if job["status"] == "done":
+        return JSONResponse(body, status_code=200)
+    if job["status"] == "error":
+        # The comparison failed while calling an upstream dependency (normally
+        # the AI/search provider). Do not report a failed job as HTTP 200.
+        return JSONResponse(body, status_code=502)
+    return JSONResponse(body, status_code=202)
 
 
 # ---- web page (anonymous, per-IP limit) -----------------------------------------
