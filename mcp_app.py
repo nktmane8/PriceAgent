@@ -92,4 +92,9 @@ async def get_reviews_and_alternatives(product: str, country: str, city: str = "
 async def get_comparison_result(job_id: str) -> str:
     """Fetch the result of a comparison started by compare_prices (status: queued, running, done, error)."""
     job = await anyio.to_thread.run_sync(db.job_get, job_id)
-    return json.dumps(jobs.view(job) if job else {"error": "Unknown job_id."})
+    if not job:
+        return json.dumps({"error": "Unknown job_id."})
+    me = _principal()
+    if job.get("principal") != me:
+        return json.dumps({"error": "You do not have access to this job."})
+    return json.dumps(jobs.view(job))
