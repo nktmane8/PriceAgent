@@ -4,7 +4,7 @@ services:
     name: price-agent
     runtime: python
     plan: starter            # persistent disks need a paid plan (check Render pricing); free plans lose data on restart
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt -r requirements-dev.txt && pytest -q tests/test_smoke.py tests/test_integration.py && pytest -q tests
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /healthz
     disk:
