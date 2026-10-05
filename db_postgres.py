@@ -30,7 +30,9 @@ SCHEMA=[
 "CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,key TEXT NOT NULL,status TEXT NOT NULL,product TEXT,country TEXT,city TEXT,sites TEXT,principal TEXT,result TEXT,error TEXT,error_code TEXT,source TEXT,input_tokens INTEGER DEFAULT 0,output_tokens INTEGER DEFAULT 0,searches INTEGER DEFAULT 0,created_at DOUBLE PRECISION NOT NULL,updated_at DOUBLE PRECISION NOT NULL)",
 "CREATE INDEX IF NOT EXISTS ix_jobs_key ON jobs(key,status)",
 "CREATE TABLE IF NOT EXISTS price_history(id BIGSERIAL PRIMARY KEY,key TEXT NOT NULL,store TEXT NOT NULL,price DOUBLE PRECISION,effective_price DOUBLE PRECISION,currency TEXT,ts DOUBLE PRECISION NOT NULL)",
-"CREATE INDEX IF NOT EXISTS ix_hist ON price_history(key,ts)"
+"CREATE INDEX IF NOT EXISTS ix_hist ON price_history(key,ts)",
+"CREATE TABLE IF NOT EXISTS products(id BIGSERIAL PRIMARY KEY,canonical_key TEXT UNIQUE NOT NULL,display_name TEXT NOT NULL,brand TEXT,variant TEXT,storage TEXT,color TEXT,created_at DOUBLE PRECISION NOT NULL,updated_at DOUBLE PRECISION NOT NULL)",
+"CREATE INDEX IF NOT EXISTS ix_products_brand ON products(brand)"
 ]
 
 @contextmanager
@@ -99,6 +101,25 @@ def job_get(jid):
 def job_active(key):
     with conn() as c:r=c.execute("SELECT id FROM jobs WHERE key=%s AND status IN ('queued','running') ORDER BY created_at DESC LIMIT 1",(key,)).fetchone()
     return r["id"] if r else None
+
+def product_upsert(identity):
+    """Persist a canonical product identity and return its stable id."""
+    now=time.time()
+    with tx() as c:
+        r=c.execute(
+            "INSERT INTO products(canonical_key,display_name,brand,variant,storage,color,created_at,updated_at) "
+            "VALUES(%s,%s,%s,%s,%s,%s,%s,%s) "
+            "ON CONFLICT(canonical_key) DO UPDATE SET display_name=EXCLUDED.display_name,updated_at=EXCLUDED.updated_at "
+            "RETURNING id",
+            (identity["canonical_key"],identity["display_name"],identity["brand"],identity["variant"],
+             identity["storage"],identity["color"],now,now),
+        ).fetchone()
+    return int(r["id"])
+
+def product_get(canonical_key):
+    with conn() as c:
+        r=c.execute("SELECT * FROM products WHERE canonical_key=%s",(canonical_key,)).fetchone()
+    return dict(r) if r else None
 
 def history_key(product,country,city):return "|".join([product.lower(),country.lower(),city.lower()])
 
