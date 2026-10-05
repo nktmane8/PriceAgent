@@ -54,6 +54,11 @@ YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "")
 GOOGLE_PLACES_API_KEY = os.environ.get("GOOGLE_PLACES_API_KEY", "")     # searches for reviews + alternatives
 GA4_MEASUREMENT_ID = os.environ.get("GA4_MEASUREMENT_ID", "")
 GOOGLE_SEARCH_CONSOLE_VERIFICATION = os.environ.get("GOOGLE_SEARCH_CONSOLE_VERIFICATION", "")
+GA4_PROPERTY_ID = os.environ.get("GA4_PROPERTY_ID", "")
+GOOGLE_ANALYTICS_SERVICE_ACCOUNT_JSON = os.environ.get("GOOGLE_ANALYTICS_SERVICE_ACCOUNT_JSON", "")
+GOOGLE_SEARCH_CONSOLE_SITE_URL = os.environ.get("GOOGLE_SEARCH_CONSOLE_SITE_URL", PUBLIC_URL if "PUBLIC_URL" in globals() else "")
+RENDER_API_TOKEN = os.environ.get("RENDER_API_TOKEN", "")
+RENDER_SERVICE_ID = os.environ.get("RENDER_SERVICE_ID", "")
 MAX_PAUSE_LOOPS = _int("MAX_PAUSE_LOOPS", 4)                # retained for config compatibility; Responses handles tool continuation
 RATE_LIMIT = _int("RATE_LIMIT", 5)                          # web users: comparisons per IP per hour
 USER_RATE_LIMIT = _int("USER_RATE_LIMIT", 30)               # OAuth users: per user per hour
@@ -139,4 +144,6 @@ def summary() -> dict:
             "gemini_model": GEMINI_MODEL, "openai_model": OPENAI_MODEL, "groq_model": GROQ_MODEL, "hf_model": HF_MODEL, "ollama_model": OLLAMA_MODEL, "workers": WORKERS, "free_render": FREE_RENDER, "db": DB_PATH,
             "searches": MAX_SEARCHES, "insight_searches": MAX_INSIGHT_SEARCHES, "cache_ttl": CACHE_TTL,
             "limits": [RATE_LIMIT, USER_RATE_LIMIT],
-            "admin_enabled": bool(ADMIN_KEY), "ga4": bool(GA4_MEASUREMENT_ID), "search_console": bool(GOOGLE_SEARCH_CONSOLE_VERIFICATION)}
+            "admin_enabled": bool(ADMIN_KEY), "ga4": bool(GA4_MEASUREMENT_ID), "search_console": bool(GOOGLE_SEARCH_CONSOLE_VERIFICATION),
+            "analytics_api": bool(GA4_PROPERTY_ID and GOOGLE_ANALYTICS_SERVICE_ACCOUNT_JSON),
+            "render_metrics": bool(RENDER_API_TOKEN and RENDER_SERVICE_ID)}
