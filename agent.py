@@ -261,7 +261,7 @@ def _provider_configured(provider):
     if provider == "huggingface":
         return bool(os.environ.get("HF_TOKEN"))
     if provider == "ollama":
-        return bool(os.environ.get("OLLAMA_API_KEY")) or config.OLLAMA_BASE_URL.startswith(("http://localhost", "http://127.0.0.1"))
+        return bool(os.environ.get("OLLAMA_API_KEY") or os.environ.get("OLLAMA_BASE_URL"))
     if provider == "openai":
         return bool(os.environ.get("OPENAI_API_KEY"))
     return False
