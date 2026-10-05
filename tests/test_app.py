@@ -197,10 +197,12 @@ def test_env_loader_precedence_and_production_checks(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "PUBLIC_URL", "http://x")
     monkeypatch.setattr(config, "AI_PROVIDER", "openai")
     monkeypatch.setattr(config, "DB_PATH", "data/x.db")
-    monkeypatch.setattr(config, "API_KEYS", ["short"])
+    monkeypatch.setattr(config, "GOOGLE_CLIENT_ID", "")
+    monkeypatch.setattr(config, "GOOGLE_CLIENT_SECRET", "")
+    monkeypatch.setattr(config, "JWT_SECRET", "short")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     found = " | ".join(config.problems())
-    for word in ("OPENAI_API_KEY", "https", "absolute path", "NOMINATIM_CONTACT", "20+"):
+    for word in ("OPENAI_API_KEY", "https", "absolute path", "NOMINATIM_CONTACT", "32"):
         assert word in found
     import pytest
     with pytest.raises(RuntimeError):
