@@ -97,7 +97,9 @@ def test_ai_rate_limit_is_classified_without_network(monkeypatch):
 
     monkeypatch.setattr(agent, "OpenAI", lambda **kwargs: FakeClient())
 
-    with pytest.raises(agent.AgentError, match="quota/billing limit"):
+    monkeypatch.setattr(agent.config, "AI_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    with pytest.raises(agent.AgentError, match="unavailable or over quota"):
         agent._converse("system", "prompt", 1, 100)
 
 
@@ -135,6 +137,8 @@ def test_ai_rate_limit_retries_once_then_succeeds(monkeypatch):
     monkeypatch.setattr(agent, "OpenAI", lambda **kwargs: FakeClient())
     monkeypatch.setattr(agent.time, "sleep", lambda seconds: None)
     monkeypatch.setattr(agent.config, "AI_MAX_RETRIES", 1)
+    monkeypatch.setattr(agent.config, "AI_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
     text, usage = agent._converse("system", "prompt", 1, 100)
 
