@@ -213,6 +213,12 @@ def _converse(system, prompt, max_uses, max_tokens):
     errors = []
 
     for provider in providers:
+        if provider == "gemini" and not os.environ.get("GEMINI_API_KEY"):
+            errors.append("gemini: API key not configured")
+            continue
+        if provider == "openai" and not os.environ.get("OPENAI_API_KEY"):
+            errors.append("openai: API key not configured")
+            continue
         for attempt in range(config.AI_MAX_RETRIES + 1):
             try:
                 with _AI_SEMAPHORE:
