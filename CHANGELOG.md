@@ -1,4 +1,9 @@
 # Changelog
+## 2.6.0
+- Provider migration finished: agent calls the OpenAI Responses API with `web_search`; removed remaining Anthropic references (`.env.example`, `env/*`, evals workflow and runner, tests, docs, cost note).
+- Fixed failing test `test_env_loader_precedence_and_production_checks` (it still expected `ANTHROPIC_API_KEY`).
+- Added `tools/smoke.py` (post-deploy health, OAuth discovery, `/mcp` challenge, optional real comparison).
+- Roadmap refreshed (items 11-15: production verification, web login, OpenAI error handling, dead config, CI smoke test).
 ## 2.5.0
 - Added a 90-day price-history sparkline in the web UI and refreshed the roadmap.
 - Clarified API key generation and rotation guidance without committing secrets.

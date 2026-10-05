@@ -76,21 +76,21 @@ SQLite storage: schema plus small helpers for cache, rate limits and jobs.
 
 ## `agent.py`
 
-Calls Claude with web search and validates what comes back.
+Calls OpenAI with web search and validates what comes back.
 
 | Function / class | Route or role | What it does | Line |
 |---|---|---|---|
-| `class AgentError` |  | A failure whose message is safe to show to the user. | 28 |
-| `def extract_json(text)` |  | Grab the outermost {...} from the model's text and parse it. | 32 |
-| `def _num(v)` |  | Return v only if it is a finite, non-negative number. | 40 |
-| `def _s(v, n)` |  | Return v truncated to n characters if it is a string, else ''. | 46 |
-| `def clean(data)` |  | Never trust model output: enforce types, sizes and http(s)-only URLs. | 51 |
-| `def _strs(v, n, count)` |  | Clean a list of strings (count and length caps). | 100 |
-| `def clean_insights(data)` |  | Same rule as clean(): never trust model output. Reviews without a real link are dropped. | 105 |
-| `def _converse(system, prompt, max_uses, max_tokens)` |  | Shared loop: call Claude with web search, continue paused turns, add up usage. Returns (text, usage). | 143 |
-| `def _parse(text, cleaner)` |  | Extract JSON from model text and run the cleaner; raise AgentError if invalid. | 171 |
-| `def run_agent(product, country, city, sites)` |  | Prices. Returns (clean_result, usage). Runs in a worker thread. | 179 |
-| `def run_insights(product, country, city, sites)` |  | Reviews + similar products. Same return shape as run_agent. | 188 |
+| `class AgentError` |  | A failure whose message is safe to show to the user. | 29 |
+| `def extract_json(text)` |  | Grab the outermost {...} from the model's text and parse it. | 33 |
+| `def _num(v)` |  | Return v only if it is a finite, non-negative number. | 41 |
+| `def _s(v, n)` |  | Return v truncated to n characters if it is a string, else ''. | 47 |
+| `def clean(data)` |  | Never trust model output: enforce types, sizes and http(s)-only URLs. | 52 |
+| `def _strs(v, n, count)` |  | Clean a list of strings (count and length caps). | 101 |
+| `def clean_insights(data)` |  | Same rule as clean(): never trust model output. Reviews without a real link are dropped. | 106 |
+| `def _converse(system, prompt, max_uses, max_tokens)` |  | Call OpenAI Responses API with web search and return text plus usage. | 144 |
+| `def _parse(text, cleaner)` |  | Extract JSON from model text and run the cleaner; raise AgentError if invalid. | 172 |
+| `def run_agent(product, country, city, sites)` |  | Prices. Returns (clean_result, usage). Runs in a worker thread. | 180 |
+| `def run_insights(product, country, city, sites)` |  | Reviews + similar products. Same return shape as run_agent. | 189 |
 
 ## `jobs.py`
 

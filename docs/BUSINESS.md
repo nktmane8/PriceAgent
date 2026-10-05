@@ -1,7 +1,7 @@
 # Downsides and ways to earn money
 
 ## Downsides (be honest with yourself first)
-1. **Unit economics.** Web search costs $10 per 1,000 searches (Anthropic's published price when I checked), so 15 searches is about $0.15 per uncached comparison before token costs. Free tools users already have (store apps, Google Shopping, established comparison sites) cost them nothing.
+1. **Unit economics.** Web search is billed per tool call by OpenAI (verify the current price; at a placeholder $0.01 per search, 15 searches is about $0.15 per uncached comparison) before token costs. Free tools users already have (store apps, Google Shopping, established comparison sites) cost them nothing.
 2. **Accuracy and liability.** The model can read a page wrong or match the wrong variant. A wrong "best deal" costs a user money and costs you trust.
 3. **Terms of service.** Many retailers restrict automated access and reuse of their prices, and affiliate programs often forbid showing prices that did not come from their own API. Read each program's terms before monetising.
 4. **Slow and non-deterministic.** 30-60 s and slightly different answers each run. Comparison users expect seconds.

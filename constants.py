@@ -40,4 +40,4 @@ STORE_TYPES = ("marketplace", "brand", "chain", "local")
 REVIEW_SOURCE_TYPES = ("publication", "video", "user")
 
 # ---- cost estimate --------------------------------------------------------------------
-SEARCH_COST_USD = 0.01              # Anthropic web search list price when written ($10 per 1,000); verify
+SEARCH_COST_USD = 0.01              # OpenAI web search tool-call price: VERIFY on the OpenAI pricing page; update when it changes

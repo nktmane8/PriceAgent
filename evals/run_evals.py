@@ -1,5 +1,5 @@
 """Run the agent on real products and score the results. COSTS MONEY (real searches).
-  ANTHROPIC_API_KEY=... python evals/run_evals.py        # runs enabled cases in evals/products.json
+  OPENAI_API_KEY=... python evals/run_evals.py        # runs enabled cases in evals/products.json
 Exit code 1 if the pass rate is below MIN_PASS_RATE (default 0.8)."""
 import json
 import os

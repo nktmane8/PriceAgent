@@ -9,9 +9,9 @@ Edit `evals/products.json`. For each case open the store pages yourself on the d
 
 ## Run
 ```bash
-ANTHROPIC_API_KEY=... python evals/run_evals.py     # costs real searches: cases x MAX_SEARCHES x about $0.01
+OPENAI_API_KEY=... python evals/run_evals.py     # costs real searches: cases x MAX_SEARCHES x about $0.01
 ```
-Writes `evals/report.json` (pass rate, seconds, searches, store coverage per country). Exit code 1 if the pass rate is below `MIN_PASS_RATE` (default 0.8). `.github/workflows/evals.yml` runs it weekly when the `ANTHROPIC_API_KEY` repository secret exists.
+Writes `evals/report.json` (pass rate, seconds, searches, store coverage per country). Exit code 1 if the pass rate is below `MIN_PASS_RATE` (default 0.8). `.github/workflows/evals.yml` runs it weekly when the `OPENAI_API_KEY` repository secret exists.
 
 ## Reading results
 A drop after a prompt, model or search-tool change means roll back or fix. A single store failing across cases means it started blocking: record it in `STORE_COVERAGE.md`.

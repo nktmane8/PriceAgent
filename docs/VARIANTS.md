@@ -3,14 +3,14 @@ Measured from the code on 2026-10-01.
 
 | | Original (this repo root) | `apps/price-agent-rag` | `apps/price-agent-plain` |
 |---|---|---|---|
-| Where answers come from | Claude with the web search tool, live | Passages retrieved from a knowledge base you ingest (SQLite FTS5 BM25, optional vectors); LLM optional | Prices in a database fed by a collector, CSV, admins and community reports |
-| Paid key | Anthropic (required) | none | none |
+| Where answers come from | OpenAI (Responses API) with the web search tool, live | Passages retrieved from a knowledge base you ingest (SQLite FTS5 BM25, optional vectors); LLM optional | Prices in a database fed by a collector, CSV, admins and community reports |
+| Paid key | OpenAI (required) | none | none |
 | Python size | 1,319 lines in 10 modules, 301 test lines (16 tests) | 548 lines in 9 modules, 146 test lines (10 tests) | Node API 8 tests, Python collector 7, Java collector 22 |
-| Python dependencies | fastapi, uvicorn, anthropic, pydantic, mcp | fastapi, uvicorn, pydantic | (Node: express; Java: Spring Boot) |
+| Python dependencies | fastapi, uvicorn, openai, pydantic, mcp | fastapi, uvicorn, pydantic | (Node: express; Java: Spring Boot) |
 | API surface | `/api/jobs`, `/api/v1/compare`, `/api/history`, `/api/locate`, account delete, admin stats, OAuth, `/mcp` | `/api/ask`, `/api/search`, `/api/ingest/{text,url,rss,prices}`, `/api/documents` | `/api/compare`, `/history`, `/offers`, `/ingest`, `/products`, `/stores` |
 
 ## Why prices differ between the original and the RAG app
-- **The original** asks Claude to find each store's page, read the price and compute an effective price (price minus verified instant discounts). Prices are fresh but model-dependent and costly per search.
+- **The original** asks the OpenAI model to find each store's page, read the price and compute an effective price (price minus verified instant discounts). Prices are fresh but model-dependent and costly per search.
 - **The RAG app does not look prices up.** `POST /api/ingest/prices` turns rows **you** supply into text documents, and `/api/ask` quotes them with citations. So a price is exactly as current as the last ingest, and there is **no effective-price rule, ranking or best-deal logic**. Asking "which is cheapest?" returns passages (or a model's reading of them), not a computed answer.
 - The plain app is the one that computes effective price deterministically (price minus a stated instant discount), flags offers older than 7 days, and refuses to rank mixed currencies.
 

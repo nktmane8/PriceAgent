@@ -21,7 +21,7 @@
 |---|---|---|
 | Email, password hash | `users` | Until deleted by you |
 | Coordinates (rounded ~1 km) | Sent to OpenStreetMap; not stored here | None here |
-| Product + region queries | Anthropic API, `jobs` table | Jobs 7 days; check Anthropic's retention terms |
+| Product + region queries | OpenAI API, `jobs` table | Jobs 7 days; check OpenAI data-retention terms |
 | IP addresses | `usage` (rate limits) | 24 hours |
 | Price history (product, store, price; no user data) | `price_history` | 180 days |
 
