@@ -9,7 +9,7 @@ import time
 
 import openai
 from openai import OpenAI
-from google import genai
+import requests
 
 import config
 from constants import MAX_ALTERNATIVES, MAX_OFFERS, MAX_RESULTS, MAX_REVIEWS, REVIEW_SOURCE_TYPES
@@ -148,61 +148,120 @@ def clean_insights(data) -> dict:
 
 
 
-def _gemini_usage(interaction):
-    meta = getattr(interaction, "usage_metadata", None)
-    return {
-        "input_tokens": getattr(meta, "prompt_token_count", 0) or 0,
-        "output_tokens": getattr(meta, "candidates_token_count", 0) or 0,
-        "searches": sum(
-            1 for item in (getattr(interaction, "steps", None) or [])
-            if getattr(item, "type", None) == "google_search_call"
-        ),
+def _usage(input_tokens=0, output_tokens=0, searches=0):
+    return {"input_tokens": input_tokens or 0, "output_tokens": output_tokens or 0, "searches": searches or 0}
+
+
+def _converse_openai_compatible(system, prompt, max_tokens, api_key, base_url, model, tools=None):
+    client = OpenAI(api_key=api_key, base_url=base_url, timeout=120.0, max_retries=0)
+    kwargs = {
+        "model": model,
+        "instructions": system,
+        "input": prompt,
+        "max_output_tokens": max_tokens,
     }
+    if tools:
+        kwargs["tools"] = tools
+    response = client.responses.create(**kwargs)
+    return response.output_text, _usage(
+        getattr(response.usage, "input_tokens", 0),
+        getattr(response.usage, "output_tokens", 0),
+        sum(1 for item in (response.output or []) if getattr(item, "type", None) in ("web_search_call", "browser_search_call")),
+    )
 
 
 def _converse_openai(system, prompt, max_tokens):
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise AgentError("Server is missing OPENAI_API_KEY.")
-    client = OpenAI(api_key=api_key, timeout=120.0, max_retries=0)
-    response = client.responses.create(
-        model=config.OPENAI_MODEL,
-        instructions=system,
-        input=prompt,
+    return _converse_openai_compatible(
+        system, prompt, max_tokens, api_key, None, config.OPENAI_MODEL,
         tools=[{"type": "web_search"}],
-        max_output_tokens=max_tokens,
     )
-    return response.output_text, {
-        "input_tokens": getattr(response.usage, "input_tokens", 0) or 0,
-        "output_tokens": getattr(response.usage, "output_tokens", 0) or 0,
-        "searches": sum(
-            1 for item in (response.output or [])
-            if getattr(item, "type", None) == "web_search_call"
-        ),
-    }
 
 
 def _converse_gemini(system, prompt, max_tokens):
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise AgentError("Server is missing GEMINI_API_KEY.")
-    client = genai.Client(api_key=api_key)
-    interaction = client.interactions.create(
-        model=config.GEMINI_MODEL,
-        input=f"{system}\n\n{prompt}",
-        tools=[{"type": "google_search"}],
-        generation_config={"max_output_tokens": max_tokens},
+    model = config.GEMINI_MODEL
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    response = requests.post(
+        url,
+        headers={"Content-Type": "application/json", "X-goog-api-key": api_key},
+        json={
+            "systemInstruction": {"parts": [{"text": system}]},
+            "contents": [{"parts": [{"text": prompt}]}],
+            "tools": [{"google_search": {}}],
+            "generationConfig": {"maxOutputTokens": max_tokens, "responseMimeType": "application/json"},
+        },
+        timeout=120,
     )
-    return interaction.output_text, _gemini_usage(interaction)
+    if response.status_code >= 400:
+        raise RuntimeError(f"Gemini HTTP {response.status_code}: {response.text[:1000]}")
+    payload = response.json()
+    candidates = payload.get("candidates") or []
+    parts = ((candidates[0].get("content") or {}).get("parts") or []) if candidates else []
+    text = "".join(p.get("text", "") for p in parts if isinstance(p, dict))
+    if not text:
+        raise RuntimeError("Gemini returned no text")
+    usage = payload.get("usageMetadata") or {}
+    searches = sum(
+        1 for chunk in (payload.get("groundingMetadata") or {}).get("groundingChunks", [])
+        if isinstance(chunk, dict) and chunk.get("web")
+    )
+    return text, _usage(usage.get("promptTokenCount"), usage.get("candidatesTokenCount"), searches)
+
+
+def _converse_groq(system, prompt, max_tokens):
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        raise AgentError("Server is missing GROQ_API_KEY.")
+    return _converse_openai_compatible(
+        system, prompt, max_tokens, api_key, "https://api.groq.com/openai/v1",
+        config.GROQ_MODEL, tools=[{"type": "browser_search"}],
+    )
+
+
+def _converse_huggingface(system, prompt, max_tokens):
+    api_key = os.environ.get("HF_TOKEN")
+    if not api_key:
+        raise AgentError("Server is missing HF_TOKEN.")
+    return _converse_openai_compatible(
+        system, prompt, max_tokens, api_key, config.HF_BASE_URL,
+        config.HF_MODEL,
+    )
+
+
+def _converse_ollama(system, prompt, max_tokens):
+    api_key = os.environ.get("OLLAMA_API_KEY", "ollama")
+    return _converse_openai_compatible(
+        system, prompt, max_tokens, api_key, config.OLLAMA_BASE_URL,
+        config.OLLAMA_MODEL,
+    )
 
 
 def _provider_order():
     configured = config.AI_PROVIDER.lower().strip()
     if configured == "auto":
-        names = ["gemini", "openai"]
+        names = ["groq", "gemini", "huggingface", "ollama", "openai"]
     else:
         names = [x.strip().lower() for x in configured.split(",") if x.strip()]
-    return [x for x in names if x in {"gemini", "openai"}]
+    return [x for x in names if x in {"groq", "gemini", "huggingface", "ollama", "openai"}]
+
+
+def _provider_configured(provider):
+    if provider == "groq":
+        return bool(os.environ.get("GROQ_API_KEY"))
+    if provider == "gemini":
+        return bool(os.environ.get("GEMINI_API_KEY"))
+    if provider == "huggingface":
+        return bool(os.environ.get("HF_TOKEN"))
+    if provider == "ollama":
+        return bool(os.environ.get("OLLAMA_API_KEY")) or config.OLLAMA_BASE_URL.startswith(("http://localhost", "http://127.0.0.1"))
+    if provider == "openai":
+        return bool(os.environ.get("OPENAI_API_KEY"))
+    return False
 
 
 def _converse(system, prompt, max_uses, max_tokens):
@@ -211,20 +270,22 @@ def _converse(system, prompt, max_uses, max_tokens):
     if not providers:
         raise AgentError("No AI provider is configured.")
     errors = []
+    handlers = {
+        "groq": _converse_groq,
+        "gemini": _converse_gemini,
+        "huggingface": _converse_huggingface,
+        "ollama": _converse_ollama,
+        "openai": _converse_openai,
+    }
 
     for provider in providers:
-        if provider == "gemini" and not os.environ.get("GEMINI_API_KEY"):
-            errors.append("gemini: API key not configured")
-            continue
-        if provider == "openai" and not os.environ.get("OPENAI_API_KEY"):
-            errors.append("openai: API key not configured")
+        if not _provider_configured(provider):
+            errors.append(f"{provider}: not configured")
             continue
         for attempt in range(config.AI_MAX_RETRIES + 1):
             try:
                 with _AI_SEMAPHORE:
-                    if provider == "gemini":
-                        return _converse_gemini(system, prompt, max_tokens)
-                    return _converse_openai(system, prompt, max_tokens)
+                    return handlers[provider](system, prompt, max_tokens)
             except openai.RateLimitError as e:
                 response = getattr(e, "response", None)
                 headers = getattr(response, "headers", {}) or {}
@@ -236,13 +297,8 @@ def _converse(system, prompt, max_uses, max_tokens):
                     pass
                 code = detail.get("code")
                 error_type = detail.get("type")
-                logger.error(
-                    "AI provider 429: provider=%s attempt=%s/%s type=%s code=%s",
-                    provider, attempt + 1, config.AI_MAX_RETRIES + 1, error_type, code,
-                )
-                if code in ("insufficient_quota", "billing_hard_limit_reached") or error_type in (
-                    "insufficient_quota", "billing_hard_limit_reached"
-                ):
+                logger.warning("AI 429: provider=%s attempt=%s/%s type=%s code=%s", provider, attempt + 1, config.AI_MAX_RETRIES + 1, error_type, code)
+                if code in ("insufficient_quota", "billing_hard_limit_reached") or error_type in ("insufficient_quota", "billing_hard_limit_reached"):
                     errors.append(f"{provider}: quota exhausted")
                     break
                 if attempt >= config.AI_MAX_RETRIES:
@@ -254,14 +310,10 @@ def _converse(system, prompt, max_uses, max_tokens):
                 except (TypeError, ValueError):
                     delay = min(config.AI_MAX_RETRY_DELAY, 2 ** attempt)
                 time.sleep(delay)
-            except openai.APIConnectionError:
+            except (openai.APIConnectionError, openai.APITimeoutError) as e:
+                logger.warning("AI transient error: provider=%s attempt=%s/%s error=%s", provider, attempt + 1, config.AI_MAX_RETRIES + 1, type(e).__name__)
                 if attempt >= config.AI_MAX_RETRIES:
-                    errors.append(f"{provider}: connection failure")
-                    break
-                time.sleep(min(config.AI_MAX_RETRY_DELAY, 2 ** attempt))
-            except openai.APITimeoutError:
-                if attempt >= config.AI_MAX_RETRIES:
-                    errors.append(f"{provider}: timeout")
+                    errors.append(f"{provider}: transient failure")
                     break
                 time.sleep(min(config.AI_MAX_RETRY_DELAY, 2 ** attempt))
             except openai.APIError as e:
@@ -272,24 +324,18 @@ def _converse(system, prompt, max_uses, max_tokens):
                 raise
             except Exception as e:
                 message = str(e).lower()
-                retryable = any(x in message for x in (
-                    "429", "resource_exhausted", "503", "unavailable", "timeout"
-                ))
-                logger.error(
-                    "AI provider error: provider=%s attempt=%s/%s error=%s",
-                    provider, attempt + 1, config.AI_MAX_RETRIES + 1, e,
-                )
+                retryable = any(x in message for x in ("429", "resource_exhausted", "503", "502", "504", "unavailable", "timeout", "rate limit", "too many requests"))
+                logger.warning("AI provider error: provider=%s attempt=%s/%s error=%s", provider, attempt + 1, config.AI_MAX_RETRIES + 1, e)
                 if retryable and attempt < config.AI_MAX_RETRIES:
                     time.sleep(min(config.AI_MAX_RETRY_DELAY, 2 ** attempt))
                     continue
                 errors.append(f"{provider}: {type(e).__name__}")
                 break
 
-    if errors:
-        if any("quota exhausted" in error for error in errors):
-            raise AgentError("AI provider quota/billing limit is exhausted. Check the configured provider billing and usage limits.")
-        raise AgentError("All configured AI providers failed. Try again shortly.")
-    raise AgentError("AI provider request failed.")
+    if any("quota exhausted" in error for error in errors):
+        raise AgentError("All configured AI providers are unavailable or over quota. Check provider keys and billing limits.")
+    raise AgentError("All configured AI providers failed. Try again shortly.")
+
 
 def _parse(text, cleaner):
     """Extract JSON from model text and run the cleaner; raise AgentError if invalid."""
