@@ -34,6 +34,7 @@ logging.basicConfig(level=config.LOG_LEVEL)
 config.assert_ready()  # fail fast on bad production config
 logging.getLogger("price-agent").info("Starting with %s", config.summary())
 db.init()            # create tables (idempotent)
+db.recover_stale_jobs(max(300, config.JOB_TIMEOUT * 2))
 jobs.start_purger()  # background cleanup thread
 
 BASE = Path(__file__).parent
