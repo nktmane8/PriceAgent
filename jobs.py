@@ -57,6 +57,7 @@ def submit(params, principal, limit):
     with lock:
         cached=db.cache_get(key)
         if cached is not None:
+            db.product_upsert(normalize(params["product"]))
             jid=db.job_create(key,params,principal,status=DONE)
             db.job_update(jid,status=DONE,result=cached,source="cache")
             return jid
