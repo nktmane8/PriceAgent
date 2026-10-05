@@ -8,6 +8,9 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+_LOCATION_LOCK = __import__('threading').Lock()
+_LOCATION_LAST_REQUEST = 0.0
 from typing import Literal
 from urllib.parse import urlencode
 
@@ -199,11 +202,20 @@ def locate(
     last_error = None
     retry_after = None
 
-    # Nominatim is an external dependency. Retry only transient failures and
-    # keep the total blocking time bounded.
-    for attempt in range(3):
+    # Nominatim is a shared public service. Serialize calls in this process
+    # and keep at least ~1 second between requests to avoid burst traffic.
+    global _LOCATION_LAST_REQUEST
+    with _LOCATION_LOCK:
+        elapsed = time.monotonic() - _LOCATION_LAST_REQUEST
+        if elapsed < 1.1:
+            time.sleep(1.1 - elapsed)
+        _LOCATION_LAST_REQUEST = time.monotonic()
+
+    # Nominatim is an external dependency. Retry only transient failures,
+    # with a short bounded timeout so the browser is not left waiting.
+    for attempt in range(2):
         try:
-            with urllib.request.urlopen(req, timeout=8) as response:
+            with urllib.request.urlopen(req, timeout=5) as response:
                 if response.status != 200:
                     raise urllib.error.HTTPError(
                         url, response.status, f"Unexpected status {response.status}",
@@ -224,7 +236,7 @@ def locate(
                 "location provider HTTP failure: status=%s attempt=%s/3 retryable=%s",
                 e.code, attempt + 1, transient,
             )
-            if not transient or attempt == 2:
+            if not transient or attempt == 1:
                 break
             try:
                 delay = min(4, max(1, int(retry_after))) if retry_after else 2 ** attempt
@@ -237,7 +249,7 @@ def locate(
                 "location provider failure: type=%s attempt=%s/3",
                 type(e).__name__, attempt + 1,
             )
-            if attempt == 2:
+            if attempt == 1:
                 break
             time.sleep(2 ** attempt)
 
