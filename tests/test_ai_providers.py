@@ -48,3 +48,18 @@ def test_auto_provider_falls_back_from_gemini_to_openai(monkeypatch):
 def test_provider_order_can_explicitly_select_both(monkeypatch):
     monkeypatch.setattr(config, "AI_PROVIDER", "gemini,openai")
     assert agent._provider_order() == ["gemini", "openai"]
+
+def test_auto_provider_order_includes_all_fallbacks(monkeypatch):
+    monkeypatch.setattr(config, "AI_PROVIDER", "auto")
+    assert agent._provider_order() == ["groq", "gemini", "huggingface", "ollama", "openai"]
+
+
+def test_auto_skips_unconfigured_providers(monkeypatch):
+    calls = []
+    monkeypatch.setattr(config, "AI_PROVIDER", "auto")
+    monkeypatch.setattr(config, "AI_MAX_RETRIES", 0)
+    monkeypatch.setattr(agent, "_provider_configured", lambda provider: provider in {"ollama"})
+    monkeypatch.setattr(agent, "_converse_ollama", lambda *args: (calls.append("ollama") or '{"ok": true}', {"input_tokens": 1, "output_tokens": 1, "searches": 0}))
+    text, usage = agent._converse("system", "prompt", 1, 100)
+    assert calls == ["ollama"]
+    assert text == '{"ok": true}'
