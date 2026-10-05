@@ -7,6 +7,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import config
 import db
+import main
 
 BODY = {"product": "Phone X 128GB", "country": "India", "city": "Pune"}
 CB = "https://claude.ai/api/mcp/auth_callback"
@@ -40,7 +41,7 @@ def test_job_lifecycle_cache_and_cleaning(client, calls):
 
 
 def test_rate_limit_is_persisted(client, monkeypatch):
-    monkeypatch.setattr(config, "RATE_LIMIT", 1)
+    monkeypatch.setattr(config, "USER_RATE_LIMIT", 1)
     assert client.post("/api/jobs", json=BODY).status_code in (200, 202)
     r = client.post("/api/jobs", json={**BODY, "product": "Other Phone 5"})
     assert r.status_code == 429
@@ -222,6 +223,7 @@ def test_env_loader_precedence_and_production_checks(tmp_path, monkeypatch):
     assert os.environ["EXISTING"] == "from_shell"                      # real env vars always win
     monkeypatch.setattr(config, "PRODUCTION_LIKE", True)
     monkeypatch.setattr(config, "PUBLIC_URL", "http://x")
+    monkeypatch.setattr(config, "AI_PROVIDER", "openai")
     monkeypatch.setattr(config, "DB_PATH", "data/x.db")
     monkeypatch.setattr(config, "API_KEYS", ["short"])
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
