@@ -11,7 +11,7 @@ jobs:
     defaults: {run: {working-directory: apps/price-agent-rag}}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with: {python-version: "3.12"}
       - run: pip install -r requirements.txt -r requirements-dev.txt
       - run: python -m pytest -q tests
@@ -36,7 +36,7 @@ jobs:
     defaults: {run: {working-directory: apps/price-agent-plain}}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with: {python-version: "3.12"}
       - run: pip install pytest && python -m pytest -q collector/tests
   plain-collector-spring:

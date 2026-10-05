@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - if: env.API_URL != '' && env.INGEST_KEY != ''
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with: {python-version: "3.12"}
       - if: env.API_URL != '' && env.INGEST_KEY != ''
         run: python apps/price-agent-plain/collector/collect.py apps/price-agent-plain/collector/sources.json   # commit your own sources.json first
