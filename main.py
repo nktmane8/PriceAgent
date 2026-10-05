@@ -81,6 +81,8 @@ def start(params, principal, limit):
         return jobs.submit(params, principal, limit)
     except jobs.RateLimited as e:
         raise HTTPException(429, f"Hourly limit reached. Try again in about {e.minutes} minutes.")
+    except jobs.QueueUnavailable:
+        raise HTTPException(503, "The job queue is temporarily unavailable. Please retry.", headers={"Retry-After": "10"})
 
 
 def partner(key: str | None = Depends(api_key_header), bearer: str | None = Depends(oauth2)):
