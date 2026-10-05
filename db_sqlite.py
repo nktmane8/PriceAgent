@@ -60,7 +60,11 @@ def init():
     with conn() as c:
         c.execute("PRAGMA journal_mode=WAL")
         c.executescript(SCHEMA)
-        c.execute("ALTER TABLE jobs ADD COLUMN error_code TEXT")
+        try:
+            c.execute("ALTER TABLE jobs ADD COLUMN error_code TEXT")
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" not in str(e).lower():
+                raise
         # Jobs that were in flight when the process stopped can never finish.
         c.execute("UPDATE jobs SET status='error', error='Server restarted. Please retry.', updated_at=? "
                   "WHERE status IN ('queued','running')", (time.time(),))
