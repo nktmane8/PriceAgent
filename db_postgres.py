@@ -51,6 +51,10 @@ def tx():
 def init():
     with psycopg.connect(config.DATABASE_URL) as c:
         for s in SCHEMA:c.execute(s)
+        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub TEXT")
+        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT NOT NULL DEFAULT 'password'")
+        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS pw_hash TEXT")
+        c.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_google_sub ON users(google_sub)")
         c.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS error_code TEXT")
         c.commit()
 
