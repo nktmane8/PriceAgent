@@ -1,5 +1,6 @@
 """Calls OpenAI with web search and validates what comes back."""
 import json
+import logging
 import math
 import os
 import re
