@@ -154,7 +154,7 @@ def delete_account(body: "DeleteAccount", bearer: str | None = Depends(oauth2)):
 # ---- helpers ---------------------------------------------------------------------------
 @api.get("/api/locate", include_in_schema=False)
 def locate(request: Request, lat: float = Query(..., ge=-90, le=90), lon: float = Query(..., ge=-180, le=180)):
-    """Coordinates -> country + city via OpenStreetMap Nominatim. Rounded to ~1 km; not stored."""
+    """Coordinates -> country + city via OpenStreetMap Nominatim. Rounded to ~1 km and cached for CACHE_TTL seconds."""
     wait = db.rate_check("loc:" + client_ip(request), config.LOCATE_LIMIT)
     if wait:
         raise HTTPException(429, f"Too many lookups. Try again in about {wait} minutes.")
