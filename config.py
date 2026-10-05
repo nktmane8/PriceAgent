@@ -67,7 +67,11 @@ EXTRA_ORIGINS = [o for o in os.environ.get("EXTRA_ORIGINS", "").split(",") if o]
 def problems() -> list[str]:
     """Configuration mistakes. Fatal in staging/production, warnings elsewhere."""
     p = []
-    if not os.environ.get("OPENAI_API_KEY") and not os.environ.get("GEMINI_API_KEY"):
+    if AI_PROVIDER in ("gemini", "gemini,openai", "openai,gemini") and not os.environ.get("GEMINI_API_KEY"):
+        p.append("GEMINI_API_KEY is required for the configured Gemini provider")
+    if AI_PROVIDER in ("openai", "gemini,openai", "openai,gemini") and not os.environ.get("OPENAI_API_KEY"):
+        p.append("OPENAI_API_KEY is required for the configured OpenAI provider")
+    if AI_PROVIDER == "auto" and not os.environ.get("OPENAI_API_KEY") and not os.environ.get("GEMINI_API_KEY"):
         p.append("Neither OPENAI_API_KEY nor GEMINI_API_KEY is set")
     if PRODUCTION_LIKE:
         if not PUBLIC_URL.startswith("https://"):
