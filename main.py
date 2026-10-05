@@ -4,6 +4,8 @@ import hashlib
 import hmac
 import json
 import logging
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Literal
@@ -156,19 +158,46 @@ def locate(request: Request, lat: float = Query(..., ge=-90, le=90), lon: float 
     wait = db.rate_check("loc:" + client_ip(request), config.LOCATE_LIMIT)
     if wait:
         raise HTTPException(429, f"Too many lookups. Try again in about {wait} minutes.")
+    cache_key = "location:" + str(round(lat, 2)) + ":" + str(round(lon, 2))
+    cached = db.cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     url = "https://nominatim.openstreetmap.org/reverse?" + urlencode(
         {"format": "jsonv2", "lat": round(lat, 2), "lon": round(lon, 2), "zoom": 10, "accept-language": "en"})
     req = urllib.request.Request(url, headers={"User-Agent": f"price-agent/1.0 ({config.NOMINATIM_CONTACT})"})
-    try:
-        with urllib.request.urlopen(req, timeout=8) as r:
-            addr = json.load(r).get("address", {})
-    except Exception:
+    addr = None
+    last_error = None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=8) as r:
+                addr = json.load(r).get("address", {})
+            break
+        except urllib.error.HTTPError as e:
+            last_error = e
+            if e.code not in (429, 502, 503, 504) or attempt == 2:
+                break
+            retry_after = e.headers.get("Retry-After")
+            try:
+                delay = min(4, max(1, int(retry_after))) if retry_after else 2 ** attempt
+            except (TypeError, ValueError):
+                delay = 2 ** attempt
+            time.sleep(delay)
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
+            last_error = e
+            if attempt == 2:
+                break
+            time.sleep(2 ** attempt)
+    if addr is None:
+        logging.getLogger("price-agent").warning("location provider failed after retries: %s", last_error)
         raise HTTPException(502, "Could not look up your location. Type your country and city instead.")
     if not addr.get("country"):
         raise HTTPException(404, "No country found for that location. Type it instead.")
     city = (addr.get("city") or addr.get("town") or addr.get("village") or addr.get("state_district")
             or addr.get("county") or addr.get("state") or "")
-    return {"country": addr["country"], "city": city}
+    result = {"country": addr["country"], "city": city}
+    db.cache_set(cache_key, result)
+    return result
 
 
 @api.get("/api/history", include_in_schema=False)
