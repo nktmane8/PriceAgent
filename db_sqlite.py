@@ -26,7 +26,7 @@ CREATE INDEX IF NOT EXISTS ix_jobs_key ON jobs(key, status);
 CREATE TABLE IF NOT EXISTS price_history(id INTEGER PRIMARY KEY, key TEXT NOT NULL, store TEXT NOT NULL, price REAL, effective_price REAL, currency TEXT, ts REAL NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_hist ON price_history(key, ts);
 CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY AUTOINCREMENT, canonical_key TEXT UNIQUE NOT NULL, display_name TEXT NOT NULL, brand TEXT, variant TEXT, storage TEXT, color TEXT, created_at REAL NOT NULL, updated_at REAL NOT NULL);
-CREATE INDEX IF NOT EXISTS ix_products_brand ON products(brand);\nCREATE TABLE IF NOT EXISTS analytics_events(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,product TEXT,store TEXT,metadata TEXT,ts REAL NOT NULL);\nCREATE INDEX IF NOT EXISTS ix_analytics_ts ON analytics_events(ts);\nCREATE INDEX IF NOT EXISTS ix_analytics_name ON analytics_events(name);
+CREATE INDEX IF NOT EXISTS ix_products_brand ON products(brand);\nCREATE TABLE IF NOT EXISTS analytics_events(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,client_id TEXT,user_id TEXT,product TEXT,store TEXT,metadata TEXT,ts REAL NOT NULL);\nCREATE INDEX IF NOT EXISTS ix_analytics_ts ON analytics_events(ts);\nCREATE INDEX IF NOT EXISTS ix_analytics_name ON analytics_events(name);
 """
 
 
@@ -80,6 +80,12 @@ def init():
             if "duplicate column name" not in str(e).lower():
                 raise
         # Jobs that were in flight when the process stopped can never finish.
+        for sql in ("ALTER TABLE analytics_events ADD COLUMN client_id TEXT","ALTER TABLE analytics_events ADD COLUMN user_id TEXT"):
+            try:
+                c.execute(sql)
+            except sqlite3.OperationalError as e:
+                if "duplicate column name" not in str(e).lower():
+                    raise
         c.execute("UPDATE jobs SET status='error', error='Server restarted. Please retry.', updated_at=? "
                   "WHERE status IN ('queued','running')", (time.time(),))
 
@@ -253,3 +259,19 @@ def stats():
                 "avg_agent_seconds": round(one("SELECT COALESCE(AVG(updated_at-created_at),0) FROM jobs "
                                                "WHERE status='done' AND source='agent'"), 1),
                 "top_errors": errors, "by_principal_type": by_type}
+
+
+def analytics_event_create(name, client_id, user_id, product, store, metadata, ts):
+    with conn() as c:
+        c.execute("INSERT INTO analytics_events(name,client_id,user_id,product,store,metadata,ts) VALUES(?,?,?,?,?,?,?)",
+                  (name,client_id,user_id,product,store,json.dumps(metadata or {}),ts))
+
+def analytics_dashboard(days=30):
+    since=time.time()-days*86400
+    with conn() as c:
+        totals=c.execute("SELECT COUNT(*) AS events,COUNT(DISTINCT client_id) AS visitors FROM analytics_events WHERE ts>?",(since,)).fetchone()
+        events=[dict(r) for r in c.execute("SELECT name,COUNT(*) AS count FROM analytics_events WHERE ts>? GROUP BY name ORDER BY count DESC",(since,))]
+        products=[dict(r) for r in c.execute("SELECT product,COUNT(*) AS count FROM analytics_events WHERE ts>? AND product IS NOT NULL GROUP BY product ORDER BY count DESC LIMIT 10",(since,))]
+        stores=[dict(r) for r in c.execute("SELECT store,COUNT(*) AS count FROM analytics_events WHERE ts>? AND store IS NOT NULL GROUP BY store ORDER BY count DESC LIMIT 10",(since,))]
+        daily=[dict(r) for r in c.execute("SELECT date(ts,'unixepoch') AS day,COUNT(*) AS count FROM analytics_events WHERE ts>? GROUP BY day ORDER BY day",(since,))]
+    return {"window_days":days,"totals":dict(totals),"events":events,"top_products":products,"top_stores":stores,"daily":daily}

@@ -33,7 +33,7 @@ SCHEMA=[
 "CREATE TABLE IF NOT EXISTS price_history(id BIGSERIAL PRIMARY KEY,key TEXT NOT NULL,store TEXT NOT NULL,price DOUBLE PRECISION,effective_price DOUBLE PRECISION,currency TEXT,ts DOUBLE PRECISION NOT NULL)",
 "CREATE INDEX IF NOT EXISTS ix_hist ON price_history(key,ts)",
 "CREATE TABLE IF NOT EXISTS products(id BIGSERIAL PRIMARY KEY,canonical_key TEXT UNIQUE NOT NULL,display_name TEXT NOT NULL,brand TEXT,variant TEXT,storage TEXT,color TEXT,created_at DOUBLE PRECISION NOT NULL,updated_at DOUBLE PRECISION NOT NULL)",
-"CREATE INDEX IF NOT EXISTS ix_products_brand ON products(brand)",\n"CREATE TABLE IF NOT EXISTS analytics_events(id BIGSERIAL PRIMARY KEY,name TEXT NOT NULL,product TEXT,store TEXT,metadata TEXT,ts DOUBLE PRECISION NOT NULL)",\n"CREATE INDEX IF NOT EXISTS ix_analytics_ts ON analytics_events(ts)",\n"CREATE INDEX IF NOT EXISTS ix_analytics_name ON analytics_events(name)"
+"CREATE INDEX IF NOT EXISTS ix_products_brand ON products(brand)",\n"CREATE TABLE IF NOT EXISTS analytics_events(id BIGSERIAL PRIMARY KEY,name TEXT NOT NULL,client_id TEXT,user_id TEXT,product TEXT,store TEXT,metadata TEXT,ts DOUBLE PRECISION NOT NULL)",\n"CREATE INDEX IF NOT EXISTS ix_analytics_ts ON analytics_events(ts)",\n"CREATE INDEX IF NOT EXISTS ix_analytics_name ON analytics_events(name)"
 ]
 
 @contextmanager
@@ -56,6 +56,8 @@ def init():
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS pw_hash TEXT")
         c.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_google_sub ON users(google_sub)")
         c.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS error_code TEXT")
+        c.execute("ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS client_id TEXT")
+        c.execute("ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS user_id TEXT")
         c.commit()
 
 def recover_stale_jobs(max_age):
@@ -155,3 +157,20 @@ def stats():
         by_type={r["t"]:{"jobs":r["jobs"],"searches":r["s"]} for r in c.execute("SELECT split_part(principal,':',1) AS t,COUNT(*) AS jobs,COALESCE(SUM(searches),0) AS s FROM jobs GROUP BY t")}
         q=lambda x:c.execute(x).fetchone()["v"]
         return {"jobs":jobs,"users":q("SELECT COUNT(*) AS v FROM users"),"oauth_clients":q("SELECT COUNT(*) AS v FROM oauth_clients"),"cache_entries":q("SELECT COUNT(*) AS v FROM cache"),"price_history_rows":q("SELECT COUNT(*) AS v FROM price_history"),"input_tokens":q("SELECT COALESCE(SUM(input_tokens),0) AS v FROM jobs"),"output_tokens":q("SELECT COALESCE(SUM(output_tokens),0) AS v FROM jobs"),"web_searches":s,"search_cost_usd_estimate":round(s*SEARCH_COST_USD,2),"cache_hit_rate":round(cached/done,3) if done else None,"avg_agent_seconds":round(q("SELECT COALESCE(AVG(updated_at-created_at),0) AS v FROM jobs WHERE status='done' AND source='agent'"),1),"top_errors":errors,"by_principal_type":by_type}
+
+
+def analytics_event_create(name, client_id, user_id, product, store, metadata, ts):
+    with conn() as c:
+        c.execute("INSERT INTO analytics_events(name,client_id,user_id,product,store,metadata,ts) VALUES(%s,%s,%s,%s,%s,%s,%s)",
+                  (name,client_id,user_id,product,store,json.dumps(metadata or {}),ts))
+        c.commit()
+
+def analytics_dashboard(days=30):
+    since=time.time()-days*86400
+    with conn() as c:
+        totals=c.execute("SELECT COUNT(*) AS events,COUNT(DISTINCT client_id) AS visitors FROM analytics_events WHERE ts>%s",(since,)).fetchone()
+        events=[dict(r) for r in c.execute("SELECT name,COUNT(*) AS count FROM analytics_events WHERE ts>%s GROUP BY name ORDER BY count DESC",(since,))]
+        products=[dict(r) for r in c.execute("SELECT product,COUNT(*) AS count FROM analytics_events WHERE ts>%s AND product IS NOT NULL GROUP BY product ORDER BY count DESC LIMIT 10",(since,))]
+        stores=[dict(r) for r in c.execute("SELECT store,COUNT(*) AS count FROM analytics_events WHERE ts>%s AND store IS NOT NULL GROUP BY store ORDER BY count DESC LIMIT 10",(since,))]
+        daily=[dict(r) for r in c.execute("SELECT to_timestamp(ts)::date AS day,COUNT(*) AS count FROM analytics_events WHERE ts>%s GROUP BY day ORDER BY day",(since,))]
+    return {"window_days":days,"totals":dict(totals),"events":events,"top_products":products,"top_stores":stores,"daily":daily}

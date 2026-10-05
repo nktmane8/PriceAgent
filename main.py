@@ -27,6 +27,7 @@ from product_identity import normalize
 import db
 import jobs
 import oauth
+import analytics
 from constants import KIND_INSIGHTS, KIND_PRICES, MAX_SITES
 from mcp_app import mcp
 from util import client_ip, validate
@@ -335,6 +336,27 @@ def history(request: Request, product: str = Query(..., min_length=3, max_length
     return db.history_summary(db.history_key(p["product"], p["country"], p["city"]))
 
 
+@api.post("/api/analytics/events", include_in_schema=False)
+def analytics_event(request: Request, payload: dict):
+    """Record an anonymous product event without storing IP addresses."""
+    name = str(payload.get("name", "")).strip()
+    client_id = str(payload.get("client_id", "")).strip()[:120] or None
+    product = str(payload.get("product", "")).strip()[:120] or None
+    store = str(payload.get("store", "")).strip()[:120] or None
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    if name not in analytics.ALLOWED_EVENTS:
+        raise HTTPException(422, "Unsupported analytics event.")
+    if db.rate_check("analytics:" + (client_id or "anonymous"), 120):
+        raise HTTPException(429, "Analytics rate limit reached.")
+    analytics.record(name, client_id=client_id, product=product, store=store, metadata=metadata)
+    return {"accepted": True}
+
+@api.get("/api/admin/analytics", include_in_schema=False)
+def admin_analytics(days: int = Query(30, ge=1, le=90), x_admin_key: str | None = Header(default=None)):
+    if not config.ADMIN_KEY or not x_admin_key or not hmac.compare_digest(x_admin_key, config.ADMIN_KEY):
+        raise HTTPException(401, "Admin key required.")
+    return analytics.dashboard(days)
+
 @api.get("/api/admin/stats", include_in_schema=False)
 def admin_stats(x_admin_key: str | None = Header(default=None)):
     """Admin metrics (needs the X-Admin-Key header)."""
@@ -369,6 +391,12 @@ def index():
     from fastapi.responses import HTMLResponse
     return HTMLResponse(_index_html())
 
+
+@api.get("/admin/analytics", include_in_schema=False)
+def admin_analytics_page():
+    """Serve the private analytics dashboard shell."""
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse((BASE / "static" / "admin-analytics.html").read_text(encoding="utf-8"))
 
 @api.get("/robots.txt", include_in_schema=False)
 def robots():

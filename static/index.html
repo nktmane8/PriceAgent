@@ -27,8 +27,19 @@ if (window.PRICEAGENT_ANALYTICS) {
   s.src="https://www.googletagmanager.com/gtag/js?id="+encodeURIComponent(window.PRICEAGENT_ANALYTICS);
   document.head.appendChild(s);
 }
+const ANALYTICS_CLIENT_KEY = "pa_analytics_client";
+function analyticsClientId() {
+  try {
+    let id = localStorage.getItem(ANALYTICS_CLIENT_KEY);
+    if (!id) { id = crypto.randomUUID ? crypto.randomUUID() : randomUrlSafe(24); localStorage.setItem(ANALYTICS_CLIENT_KEY, id); }
+    return id;
+  } catch (_) { return ""; }
+}
 function trackEvent(name, params={}) {
   if (typeof window.gtag === "function") window.gtag("event", name, params);
+  fetch("/api/analytics/events", {method:"POST", headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({name, client_id:analyticsClientId(), product:params.search_term || params.item_name || params.product || null,
+      store:params.store || null, metadata:params}), keepalive:true}).catch(()=>{});
 }
 </script>
 <style>
@@ -205,7 +216,7 @@ function setToken(d) {
   if (d.refresh_token) sessionStorage.setItem(OAUTH.refresh, d.refresh_token);
   sessionStorage.setItem(OAUTH.expiry, String(Date.now() + (Number(d.expires_in || 3600) * 1000)));
 }
-async async function ensureClient() {
+async function ensureClient() {
   const d = await call("/oauth/register", {
     method: "POST", headers: {"Content-Type":"application/json"},
     body: JSON.stringify({client_name:"PriceAgent Web", redirect_uris:[REDIRECT_URI]})
@@ -491,9 +502,9 @@ async function showHistory() {
 // --- reviews and similar products ---
 function card(title) { const c = el("div", undefined, "card"); c.append(el("h2", title)); return c; }
 function list(items) { const ul = el("ul"); items.forEach(i => ul.append(el("li", String(i)))); return ul; }
-function openLink(text, url) {
+function openLink(text, url, eventName=null, metadata={}) {
   if (typeof url !== "string" || !url.startsWith("http")) return null;   // only real http(s) links
-  const a = el("a", text, "open"); a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer"; return a;
+  const a = el("a", text, "open"); a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer"; if (eventName) a.addEventListener("click", () => trackEvent(eventName, metadata)); return a;
 }
 const GROUPS = [["publication", "Newspaper and publication reviews"], ["video", "Video reviews"], ["user", "User reviews"], ["other", "Other sources"]];
 
@@ -510,7 +521,7 @@ function renderInsights(d) {
       row.append(el("span", title, "site"), el("span", v.reviewer || "YouTube", "muted"));
       c.append(row);
       if (v.summary) c.append(el("div", v.summary, "muted"));
-      const a = openLink("Watch review", v.url); if (a) c.append(a);
+      const a = openLink("Watch review", v.url, "youtube_review_click", {store:v.reviewer || "YouTube"}); if (a) c.append(a);
     });
     insights.append(c);
   }
@@ -562,7 +573,7 @@ function renderInsights(d) {
       if ((x.better_at || []).length) c.append(el("div", "Better at: " + x.better_at.join(", "), "muted"));
       if (x.trade_off) c.append(el("div", "Trade-off: " + x.trade_off, "muted"));
       const a = openLink("Learn more", x.url); if (a) c.append(a);
-      const buy = openLink("Buy similar product", x.buy_url || x.url);
+      const buy = openLink("Buy similar product", x.buy_url || x.url, "buy_click", {product:x.name || "similar"});
       if (buy) c.append(buy);
     }
     insights.append(c);
@@ -606,7 +617,7 @@ form.addEventListener("submit", async e => {
 $("ins").addEventListener("click", async () => {
   $("ins").disabled = true; status.className = "";
   try {
-    trackEvent("view_item", {item_name:last.product});
+    trackEvent("insight_view", {item_name:last.product});
     const job = await runJob("insights", "Reading reviews and looking for similar products… up to a minute.");
     status.textContent = "";
     renderInsights(job.result);
