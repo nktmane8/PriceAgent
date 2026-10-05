@@ -153,7 +153,10 @@ def _usage(input_tokens=0, output_tokens=0, searches=0):
 
 
 def _converse_openai_compatible(system, prompt, max_tokens, api_key, base_url, model, tools=None):
-    client = OpenAI(api_key=api_key, base_url=base_url, timeout=120.0, max_retries=0)
+    client_kwargs = {"api_key": api_key, "timeout": 120.0, "max_retries": 0}
+    if base_url:
+        client_kwargs["base_url"] = base_url
+    client = OpenAI(**client_kwargs)
     kwargs = {
         "model": model,
         "instructions": system,
