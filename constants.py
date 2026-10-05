@@ -41,3 +41,19 @@ REVIEW_SOURCE_TYPES = ("publication", "video", "user")
 
 # ---- cost estimate --------------------------------------------------------------------
 SEARCH_COST_USD = 0.01              # OpenAI web search tool-call price: VERIFY on the OpenAI pricing page; update when it changes
+
+
+# ---- stable error taxonomy --------------------------------------------------
+INVALID_REQUEST = "INVALID_REQUEST"
+AUTH_REQUIRED = "AUTH_REQUIRED"
+FORBIDDEN = "FORBIDDEN"
+JOB_NOT_FOUND = "JOB_NOT_FOUND"
+RATE_LIMITED = "RATE_LIMITED"
+QUEUE_UNAVAILABLE = "QUEUE_UNAVAILABLE"
+UPSTREAM_TIMEOUT = "UPSTREAM_TIMEOUT"
+UPSTREAM_UNAVAILABLE = "UPSTREAM_UNAVAILABLE"
+AI_QUOTA_EXHAUSTED = "AI_QUOTA_EXHAUSTED"
+AI_PROVIDER_EXHAUSTED = "AI_PROVIDER_EXHAUSTED"
+INVALID_PROVIDER_RESPONSE = "INVALID_PROVIDER_RESPONSE"
+JOB_FAILED = "JOB_FAILED"
+INTERNAL_ERROR = "INTERNAL_ERROR"
