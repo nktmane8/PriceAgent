@@ -82,15 +82,9 @@ def test_compare_api_does_not_return_200_for_failed_job(client, monkeypatch):
 
 
 def test_ai_rate_limit_is_classified_without_network(monkeypatch):
-    class FakeResponse:
-        headers = {"x-request-id": "req-test"}
-        def json(self):
-            return {"error": {"type": "insufficient_quota", "code": "insufficient_quota", "message": "quota exceeded"}}
-
     class FakeResponses:
         def create(self, **kwargs):
-            error = openai.RateLimitError("rate limited", response=FakeResponse(), body=None)
-            raise error
+            raise RuntimeError("insufficient_quota: quota exceeded")
 
     class FakeClient:
         responses = FakeResponses()
@@ -128,7 +122,7 @@ def test_ai_rate_limit_retries_once_then_succeeds(monkeypatch):
         def create(self, **kwargs):
             attempts["count"] += 1
             if attempts["count"] == 1:
-                raise openai.RateLimitError("rate limited", response=FakeResponse(), body=None)
+                raise RuntimeError("429 rate limit exceeded")
             return FakeResult()
 
     class FakeClient:
