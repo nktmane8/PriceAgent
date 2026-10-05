@@ -327,6 +327,9 @@ def _converse(system, prompt, max_uses, max_tokens):
                 raise
             except Exception as e:
                 message = str(e).lower()
+                if any(x in message for x in ("insufficient_quota", "billing_hard_limit", "quota exhausted")):
+                    errors.append(f"{provider}: quota exhausted")
+                    break
                 retryable = any(x in message for x in ("429", "resource_exhausted", "503", "502", "504", "unavailable", "timeout", "rate limit", "too many requests"))
                 logger.warning("AI provider error: provider=%s attempt=%s/%s error=%s", provider, attempt + 1, config.AI_MAX_RETRIES + 1, e)
                 if retryable and attempt < config.AI_MAX_RETRIES:
