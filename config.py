@@ -39,7 +39,10 @@ def _int(name, default):
 
 PRODUCTION_LIKE = APP_ENV in ("staging", "production")
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-MODEL = os.environ.get("MODEL", "gpt-5.6-sol")
+MODEL = os.environ.get("MODEL", "gemini-3.8-flash")
+AI_PROVIDER = os.environ.get("AI_PROVIDER", "openai")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", MODEL if AI_PROVIDER == "gemini" else "gemini-3.8-flash")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", MODEL if AI_PROVIDER == "openai" else "gpt-6-luna")
 MAX_SEARCHES = _int("MAX_SEARCHES", 15)                     # web searches per price comparison
 MAX_INSIGHT_SEARCHES = _int("MAX_INSIGHT_SEARCHES", 10)     # searches for reviews + alternatives
 MAX_PAUSE_LOOPS = _int("MAX_PAUSE_LOOPS", 4)                # retained for config compatibility; Responses handles tool continuation
@@ -64,8 +67,8 @@ EXTRA_ORIGINS = [o for o in os.environ.get("EXTRA_ORIGINS", "").split(",") if o]
 def problems() -> list[str]:
     """Configuration mistakes. Fatal in staging/production, warnings elsewhere."""
     p = []
-    if not os.environ.get("OPENAI_API_KEY"):
-        p.append("OPENAI_API_KEY is not set")
+    if not os.environ.get("OPENAI_API_KEY") and not os.environ.get("GEMINI_API_KEY"):
+        p.append("Neither OPENAI_API_KEY nor GEMINI_API_KEY is set")
     if PRODUCTION_LIKE:
         if not PUBLIC_URL.startswith("https://"):
             p.append("PUBLIC_URL must be an https URL")
@@ -90,7 +93,8 @@ def assert_ready() -> None:
 
 def summary() -> dict:
     """Non-secret settings, safe to log at start-up."""
-    return {"env": APP_ENV, "public_url": PUBLIC_URL, "model": MODEL, "workers": WORKERS, "db": DB_PATH,
+    return {"env": APP_ENV, "public_url": PUBLIC_URL, "provider": AI_PROVIDER, "model": MODEL,
+            "gemini_model": GEMINI_MODEL, "openai_model": OPENAI_MODEL, "workers": WORKERS, "db": DB_PATH,
             "searches": MAX_SEARCHES, "insight_searches": MAX_INSIGHT_SEARCHES, "cache_ttl": CACHE_TTL,
             "limits": [RATE_LIMIT, USER_RATE_LIMIT, KEY_RATE_LIMIT], "partner_keys": len(API_KEYS),
             "admin_enabled": bool(ADMIN_KEY)}
