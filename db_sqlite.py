@@ -20,7 +20,7 @@ CREATE INDEX IF NOT EXISTS ix_tokens_family ON oauth_tokens(family);
 CREATE TABLE IF NOT EXISTS cache(key TEXT PRIMARY KEY, value TEXT NOT NULL, expires_at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS usage(id INTEGER PRIMARY KEY, principal TEXT NOT NULL, ts REAL NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_usage ON usage(principal, ts);
-CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, key TEXT NOT NULL, status TEXT NOT NULL, product TEXT, country TEXT, city TEXT, sites TEXT, principal TEXT, result TEXT, error TEXT, source TEXT, input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0, searches INTEGER DEFAULT 0, created_at REAL NOT NULL, updated_at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, key TEXT NOT NULL, status TEXT NOT NULL, product TEXT, country TEXT, city TEXT, sites TEXT, principal TEXT, result TEXT, error TEXT, error_code TEXT, source TEXT, input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0, searches INTEGER DEFAULT 0, created_at REAL NOT NULL, updated_at REAL NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_jobs_key ON jobs(key, status);
 CREATE TABLE IF NOT EXISTS price_history(id INTEGER PRIMARY KEY, key TEXT NOT NULL, store TEXT NOT NULL, price REAL, effective_price REAL, currency TEXT, ts REAL NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_hist ON price_history(key, ts);
@@ -60,6 +60,7 @@ def init():
     with conn() as c:
         c.execute("PRAGMA journal_mode=WAL")
         c.executescript(SCHEMA)
+        c.execute("ALTER TABLE jobs ADD COLUMN error_code TEXT")
         # Jobs that were in flight when the process stopped can never finish.
         c.execute("UPDATE jobs SET status='error', error='Server restarted. Please retry.', updated_at=? "
                   "WHERE status IN ('queued','running')", (time.time(),))
@@ -102,7 +103,7 @@ def rate_check(principal, limit, window=HOUR):
 
 
 # ---- jobs ----------------------------------------------------------------
-_JOB_FIELDS = {"status", "result", "error", "source", "input_tokens", "output_tokens", "searches"}
+_JOB_FIELDS = {"status", "result", "error", "error_code", "source", "input_tokens", "output_tokens", "searches"}
 
 
 def job_create(key, params, principal, status=QUEUED):
