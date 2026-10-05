@@ -371,16 +371,46 @@ def healthz():
 api.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
 
+def _index_html() -> str:
+    """Render the public HTML with deployment-specific analytics/SEO settings."""
+    html = (BASE / "static" / "index.html").read_text(encoding="utf-8")
+    html = html.replace("__GA4_MEASUREMENT_ID__", config.GA4_MEASUREMENT_ID)
+    verification = config.GOOGLE_SEARCH_CONSOLE_VERIFICATION.strip()
+    if verification:
+        html = html.replace("</head>", '<meta name="google-site-verification" content="' + verification + '">\\n</head>')
+    return html
+
+
 @api.get("/", include_in_schema=False)
 def index():
-    """Serve the web page."""
-    return FileResponse(BASE / "static" / "index.html")
+    """Serve the SEO/analytics-enabled web page."""
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(_index_html())
+
+
+@api.get("/robots.txt", include_in_schema=False)
+def robots():
+    """Public crawler policy."""
+    return HTMLResponse(
+        "User-agent: *\\nAllow: /\\nDisallow: /api/\\nDisallow: /oauth/\\nSitemap: " + config.PUBLIC_URL.rstrip("/") + "/sitemap.xml\\n",
+        media_type="text/plain",
+    )
+
+
+@api.get("/sitemap.xml", include_in_schema=False)
+def sitemap():
+    """Minimal XML sitemap for the public homepage."""
+    from fastapi.responses import Response
+    loc = config.PUBLIC_URL.rstrip("/") + "/"
+    xml = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>' + loc + '</loc></url></urlset>'
+    return Response(content=xml, media_type="application/xml")
 
 
 @api.get("/oauth/callback", include_in_schema=False)
 def oauth_callback():
     """OAuth browser-client redirect target; the page completes the PKCE token exchange."""
-    return FileResponse(BASE / "static" / "index.html")
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(_index_html())
 
 
 # The MCP app is the outer ASGI app (it owns /mcp and its auth middleware); everything else goes to `api`.
