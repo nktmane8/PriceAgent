@@ -12,6 +12,9 @@ import secrets
 import sqlite3
 import time
 from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit, urlunsplit
+import requests
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -24,6 +27,8 @@ from util import client_ip
 
 router = APIRouter()
 LOOPBACK = {"127.0.0.1", "localhost", "[::1]"}
+GOOGLE_AUTH = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN = "https://oauth2.googleapis.com/token"
 NO_STORE = {"Cache-Control": "no-store", "Pragma": "no-cache"}
 
 
