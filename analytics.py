@@ -33,7 +33,8 @@ def record(name: str, *, client_id: str | None = None,
             _anon(user_id),
             (product or "").strip()[:120] or None,
             (store or "").strip()[:120] or None,
-            (store or "").strip()[:120] or None,\n            (metadata or {}),
+            (store or "").strip()[:120] or None,
+            (metadata or {}),
             time.time(),
         )
     except Exception:
