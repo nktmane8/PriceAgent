@@ -38,3 +38,38 @@ def test_locate_integration_contract(_session_client, monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == {"country": "India", "city": "Pune"}
+
+
+def test_compare_api_returns_200_for_completed_job(client, monkeypatch):
+    monkeypatch.setattr(main.jobs, "wait", lambda jid, timeout: {
+        "id": jid,
+        "status": "done",
+        "result": {"product": "Phone X"},
+        "source": "agent",
+    })
+
+    response = client.post(
+        "/api/v1/compare",
+        headers={"X-API-Key": "testkey"},
+        json={"product": "Phone X", "country": "India", "city": "Pune"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "done"
+
+
+def test_compare_api_does_not_return_200_for_failed_job(client, monkeypatch):
+    monkeypatch.setattr(main.jobs, "wait", lambda jid, timeout: {
+        "id": jid,
+        "status": "error",
+        "error": "The AI service is busy. Try again shortly.",
+    })
+
+    response = client.post(
+        "/api/v1/compare",
+        headers={"X-API-Key": "testkey"},
+        json={"product": "Phone X", "country": "India", "city": "Pune"},
+    )
+
+    assert response.status_code == 502
+    assert response.json()["status"] == "error"
