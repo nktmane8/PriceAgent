@@ -2,8 +2,8 @@ databases:
   - name: price-agent-db
     plan: free
     region: oregon
-    databaseName: price_agent
-    user: price_agent
+    databaseName: price_agent_db
+    user: price_agent_db_user
 
 services:
   - type: web
@@ -79,6 +79,7 @@ services:
 
   - type: keyvalue
     name: price-agent-queue
+    ipAllowList: []
     plan: 256mb
     region: oregon
     maxmemoryPolicy: noeviction
