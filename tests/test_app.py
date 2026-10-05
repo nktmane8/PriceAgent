@@ -28,6 +28,15 @@ def test_validation(client):
     assert client.post("/api/jobs", json={**BODY, "sites": ["not a domain"]}).status_code == 422
 
 
+def test_product_identity_normalizes_wording_and_preserves_variant(client):
+    a = client.get("/api/product/resolve", params={"product": "Apple iPhone 16 128 GB Black"}).json()
+    b = client.get("/api/product/resolve", params={"product": "apple iPhone 16 (128GB) - Black"}).json()
+    c = client.get("/api/product/resolve", params={"product": "Apple iPhone 16 256GB Black"}).json()
+    assert a["canonical_key"] == b["canonical_key"]
+    assert a["storage"] == "128gb"
+    assert c["canonical_key"] != a["canonical_key"]
+
+
 def test_job_lifecycle_cache_and_cleaning(client, calls):
     r = client.post("/api/jobs", json=BODY)
     assert r.status_code in (200, 202)
