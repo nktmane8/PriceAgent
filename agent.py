@@ -5,6 +5,7 @@ import math
 import os
 import re
 import threading
+import time
 
 import openai
 from openai import OpenAI
@@ -150,43 +151,84 @@ def _converse(system, prompt, max_uses, max_tokens):
     api_key = os.environ.get("OPENAI_API_KEY")  # never hardcoded
     if not api_key:
         raise AgentError("Server is missing OPENAI_API_KEY.")
-    client = OpenAI(api_key=api_key, timeout=120.0)
+    # Disable SDK-level retries so we have one explicit, observable retry policy.
+    # Otherwise a single user request can silently fan out into SDK retries plus
+    # application retries, making 429s harder to diagnose and increasing load.
+    client = OpenAI(api_key=api_key, timeout=120.0, max_retries=0)
     usage = {"input_tokens": 0, "output_tokens": 0, "searches": 0}
-    try:
-        with _AI_SEMAPHORE:
-            response = client.responses.create(
-                model=config.MODEL,
-                instructions=system,
-                input=prompt,
-                tools=[{"type": "web_search"}],
-                max_output_tokens=max_tokens,
+    logger = logging.getLogger("price-agent")
+
+    for attempt in range(config.AI_MAX_RETRIES + 1):
+        try:
+            with _AI_SEMAPHORE:
+                response = client.responses.create(
+                    model=config.MODEL,
+                    instructions=system,
+                    input=prompt,
+                    tools=[{"type": "web_search"}],
+                    max_output_tokens=max_tokens,
+                )
+            u = response.usage
+            usage["input_tokens"] = getattr(u, "input_tokens", 0) or 0
+            usage["output_tokens"] = getattr(u, "output_tokens", 0) or 0
+            usage["searches"] = sum(
+                1 for item in (response.output or [])
+                if getattr(item, "type", None) == "web_search_call"
             )
-        u = response.usage
-        usage["input_tokens"] = getattr(u, "input_tokens", 0) or 0
-        usage["output_tokens"] = getattr(u, "output_tokens", 0) or 0
-        usage["searches"] = sum(
-            1 for item in (response.output or [])
-            if getattr(item, "type", None) == "web_search_call"
-        )
-        return response.output_text, usage
-    except openai.RateLimitError as e:
-        # A 429 is not always transient: OpenAI can return it for request
-        # throttling or for exhausted project/account quota. Do not tell users
-        # to retry when the latter is the actual cause.
-        body = getattr(e, "body", None)
-        detail = body.get("error", {}) if isinstance(body, dict) else {}
-        code = detail.get("code")
-        error_type = detail.get("type")
-        message = detail.get("message")
-        logging.getLogger("price-agent").error(
-            "AI provider rate limit: type=%s code=%s message=%s",
-            error_type, code, message,
-        )
-        if code in ("insufficient_quota", "billing_hard_limit_reached") or error_type == "insufficient_quota":
-            raise AgentError("AI provider quota is exhausted. Please check the OpenAI project billing/quota.")
-        raise AgentError("The AI provider is rate-limited. Please retry in a few moments.")
-    except openai.APIError as e:
-        raise AgentError(f"AI service error: {getattr(e, 'message', 'unknown')}")
+            return response.output_text, usage
+        except openai.RateLimitError as e:
+            response = getattr(e, "response", None)
+            headers = getattr(response, "headers", {}) or {}
+            request_id = headers.get("x-request-id") or headers.get("X-Request-ID")
+            detail = {}
+            try:
+                payload = response.json() if response is not None else {}
+                detail = payload.get("error", {}) if isinstance(payload, dict) else {}
+            except Exception:
+                pass
+
+            code = detail.get("code")
+            error_type = detail.get("type")
+            message = detail.get("message")
+            logger.error(
+                "AI provider 429: attempt=%s/%s type=%s code=%s request_id=%s message=%s",
+                attempt + 1, config.AI_MAX_RETRIES + 1, error_type, code,
+                request_id, message,
+            )
+
+            if code in ("insufficient_quota", "billing_hard_limit_reached") or error_type in (
+                "insufficient_quota", "billing_hard_limit_reached"
+            ):
+                raise AgentError(
+                    "AI provider quota/billing limit is exhausted. Check the OpenAI project billing and usage limits."
+                )
+
+            if attempt >= config.AI_MAX_RETRIES:
+                raise AgentError(
+                    "AI provider is temporarily rate-limited. Please retry after a short delay."
+                )
+
+            retry_after = headers.get("retry-after") or headers.get("Retry-After")
+            try:
+                delay = min(config.AI_MAX_RETRY_DELAY, max(1, int(float(retry_after))))
+            except (TypeError, ValueError):
+                delay = min(config.AI_MAX_RETRY_DELAY, 2 ** attempt)
+            time.sleep(delay)
+
+        except openai.APIConnectionError:
+            if attempt >= config.AI_MAX_RETRIES:
+                raise AgentError("AI provider could not be reached. Please retry shortly.")
+            time.sleep(min(config.AI_MAX_RETRY_DELAY, 2 ** attempt))
+        except openai.APITimeoutError:
+            if attempt >= config.AI_MAX_RETRIES:
+                raise AgentError("AI provider timed out. Please retry shortly.")
+            time.sleep(min(config.AI_MAX_RETRY_DELAY, 2 ** attempt))
+        except openai.APIError as e:
+            message = getattr(e, "message", None) or str(e)
+            logger.error("AI provider API error: %s", message)
+            raise AgentError("AI provider returned an error. Please retry shortly.")
+
+    raise AgentError("AI provider request failed.")
 
 def _parse(text, cleaner):
     """Extract JSON from model text and run the cleaner; raise AgentError if invalid."""
