@@ -39,7 +39,7 @@ def _int(name, default):
 
 PRODUCTION_LIKE = APP_ENV in ("staging", "production")
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-MODEL = os.environ.get("MODEL", "gemini-3.8-flash")
+MODEL = os.environ.get("MODEL", "gpt-6-luna")
 AI_PROVIDER = os.environ.get("AI_PROVIDER", "openai")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", MODEL if AI_PROVIDER == "gemini" else "gemini-3.8-flash")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", MODEL if AI_PROVIDER == "openai" else "gpt-6-luna")
