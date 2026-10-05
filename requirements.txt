@@ -9,3 +9,4 @@ redis>=6.4
 rq>=2.6
 
 google-auth>=2.30
+PyJWT>=2.10,<3
