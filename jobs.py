@@ -50,7 +50,12 @@ def submit(params, principal, limit):
         jid=db.job_create(key,params,principal)
         q=_queue()
         if q:
-            q.enqueue(_work,jid,key,params,job_id=jid,result_ttl=config.JOB_RESULT_TTL,failure_ttl=config.JOB_FAILURE_TTL)
+            try:
+                q.enqueue(_work,jid,key,params,job_id=jid,result_ttl=config.JOB_RESULT_TTL,failure_ttl=config.JOB_FAILURE_TTL)
+            except Exception:
+                log.exception("queue enqueue failed for job %s", jid)
+                db.job_update(jid,status=ERROR,error="QUEUE_UNAVAILABLE")
+                raise
         else:
             _pool.submit(_work,jid,key,params)
         return jid
