@@ -79,6 +79,7 @@ services:
 
   - type: keyvalue
     name: price-agent-queue
-    plan: free
+    plan: 256mb
     region: oregon
     maxmemoryPolicy: noeviction
+    persistenceMode: journal-snapshot
