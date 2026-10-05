@@ -393,6 +393,12 @@ def index():
     return HTMLResponse(_index_html())
 
 
+@api.get("/admin/analytics", include_in_schema=False)
+def admin_analytics_page():
+    """Serve the private analytics dashboard shell."""
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse((BASE / "static" / "admin-analytics.html").read_text(encoding="utf-8"))
+
 @api.get("/robots.txt", include_in_schema=False)
 def robots():
     """Public crawler policy."""
