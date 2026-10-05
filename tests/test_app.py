@@ -72,8 +72,7 @@ def sign_in(client, email="a@example.com", action="signup", resource=None, cb=CB
     ver, ch = pkce()
     q = {"response_type": "code", "client_id": reg["client_id"], "redirect_uri": cb, "code_challenge": ch,
          "code_challenge_method": "S256", "state": "xyz"}
-    if resource:
-        q["resource"] = resource
+    q["resource"] = resource or config.PUBLIC_URL
     page = client.get("/oauth/authorize", params=q)
     assert page.status_code == 200 and "<b>App</b>" not in page.text      # client name is HTML-escaped
     rid = re.search(r"name=request_id value='([^']+)'", page.text).group(1)
@@ -232,3 +231,32 @@ def test_env_loader_precedence_and_production_checks(tmp_path, monkeypatch):
     import pytest
     with pytest.raises(RuntimeError):
         config.assert_ready()
+
+
+def test_rest_job_is_owned_by_creator(client):
+    first = client.post("/api/v1/compare", json=BODY, headers={"X-API-Key": "testkey"})
+    assert first.status_code == 200
+    jid = first.json()["job_id"]
+    assert client.get("/api/v1/jobs/" + jid, headers={"X-API-Key": "testkey"}).status_code == 200
+    assert client.get("/api/v1/jobs/" + jid, headers={"X-API-Key": "different-key"}).status_code == 401
+
+
+def test_oauth_requires_explicit_resource(client):
+    reg = client.post("/oauth/register", json={"redirect_uris": [CB]}).json()
+    ver, ch = pkce()
+    r = client.get("/oauth/authorize", params={
+        "response_type": "code", "client_id": reg["client_id"], "redirect_uri": CB,
+        "code_challenge": ch, "code_challenge_method": "S256"
+    }, follow_redirects=False)
+    assert r.status_code == 303
+    assert "invalid_target" in r.headers["location"]
+
+
+def test_mcp_token_cannot_be_used_for_rest(client):
+    cid, ver, r = sign_in(client, email="mcp-resource@example.com", resource=config.PUBLIC_URL + "/mcp")
+    tok = exchange(client, cid, ver, r).json()["access_token"]
+    assert client.post("/api/v1/compare", json=BODY, headers={"Authorization": "Bearer " + tok}).status_code == 401
+
+
+def test_loopback_redirect_rules_reject_public_http(client):
+    assert client.post("/oauth/register", json={"redirect_uris": ["http://priceagent.onrender.com/callback"]}).status_code == 400
