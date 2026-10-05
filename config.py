@@ -57,7 +57,6 @@ GOOGLE_SEARCH_CONSOLE_VERIFICATION = os.environ.get("GOOGLE_SEARCH_CONSOLE_VERIF
 MAX_PAUSE_LOOPS = _int("MAX_PAUSE_LOOPS", 4)                # retained for config compatibility; Responses handles tool continuation
 RATE_LIMIT = _int("RATE_LIMIT", 5)                          # web users: comparisons per IP per hour
 USER_RATE_LIMIT = _int("USER_RATE_LIMIT", 30)               # OAuth users: per user per hour
-KEY_RATE_LIMIT = _int("KEY_RATE_LIMIT", 60)                 # API keys: per key per hour
 LOCATE_LIMIT = _int("LOCATE_LIMIT", 20)                     # location lookups per IP per hour
 CACHE_TTL = _int("CACHE_TTL_SECONDS", 1800)                 # 30 minutes
 WORKERS = _int("WORKERS", 4)                                # background threads running the agent
@@ -77,7 +76,6 @@ PUBLIC_URL = os.environ.get("PUBLIC_URL", "priceagent.onrender.com").rstrip("/")
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 JWT_SECRET = os.environ.get("JWT_SECRET", "")
-API_KEYS = [k.strip() for k in os.environ.get("API_KEYS", "").split(",") if k.strip()]   # secret
 ADMIN_KEY = os.environ.get("ADMIN_KEY", "")                                             # secret
 NOMINATIM_CONTACT = os.environ.get("NOMINATIM_CONTACT", "set-NOMINATIM_CONTACT")
 EXTRA_ORIGINS = [o for o in os.environ.get("EXTRA_ORIGINS", "").split(",") if o]
@@ -110,14 +108,18 @@ def problems() -> list[str]:
     if "ollama" in AI_PROVIDER and not os.environ.get("OLLAMA_API_KEY") and not OLLAMA_BASE_URL.startswith(("http://localhost", "http://127.0.0.1")):
         p.append("OLLAMA_API_KEY is required for a remote Ollama endpoint")
     if PRODUCTION_LIKE:
+        if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+            p.append("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required in staging/production")
+        if len(JWT_SECRET) < 32:
+            p.append("JWT_SECRET must be at least 32 characters in staging/production")
         if not PUBLIC_URL.startswith("https://"):
             p.append("PUBLIC_URL must be an https URL")
         if not os.path.isabs(DB_PATH):
             p.append("DATABASE_PATH must be an absolute path on a persistent disk")
         if NOMINATIM_CONTACT.startswith("set-"):
             p.append("NOMINATIM_CONTACT must be your email or website")
-        if any(len(k) < 20 for k in API_KEYS) or (ADMIN_KEY and len(ADMIN_KEY) < 20):
-            p.append("API_KEYS and ADMIN_KEY must be random strings of 20+ characters")
+        if ADMIN_KEY and len(ADMIN_KEY) < 20:
+            p.append("ADMIN_KEY must be a random string of 20+ characters")
     return p
 
 
@@ -136,5 +138,5 @@ def summary() -> dict:
     return {"env": APP_ENV, "public_url": PUBLIC_URL, "google_signin": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET), "provider": AI_PROVIDER, "model": MODEL,
             "gemini_model": GEMINI_MODEL, "openai_model": OPENAI_MODEL, "groq_model": GROQ_MODEL, "hf_model": HF_MODEL, "ollama_model": OLLAMA_MODEL, "workers": WORKERS, "free_render": FREE_RENDER, "db": DB_PATH,
             "searches": MAX_SEARCHES, "insight_searches": MAX_INSIGHT_SEARCHES, "cache_ttl": CACHE_TTL,
-            "limits": [RATE_LIMIT, USER_RATE_LIMIT, KEY_RATE_LIMIT], "partner_keys": len(API_KEYS),
+            "limits": [RATE_LIMIT, USER_RATE_LIMIT],
             "admin_enabled": bool(ADMIN_KEY), "ga4": bool(GA4_MEASUREMENT_ID), "search_console": bool(GOOGLE_SEARCH_CONSOLE_VERIFICATION)}
