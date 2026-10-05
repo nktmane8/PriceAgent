@@ -11,7 +11,7 @@ import db
 
 ALLOWED_EVENTS = {
     "search", "comparison_complete", "comparison_error", "insight_view",
-    "buy_click", "similar_product_click", "local_store_click",
+    "buy_click", "similar_product_click", "local_store_click", "youtube_review_click", "rating_source_click", "review_source_click",
 }
 
 
