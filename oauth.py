@@ -57,7 +57,7 @@ def valid_redirect(uri):
     u = urlsplit(uri)
     if u.fragment or not u.netloc:
         return False
-    return u.scheme == "https" or (u.scheme == "http" and u.hostname in {"127.0.0.1", "localhost", "::1", "priceagent.onrender.com"})
+    return u.scheme == "https" or (u.scheme == "http" and u.hostname in {"127.0.0.1", "localhost", "::1"})
 
 
 def redirect_ok(registered, given):
