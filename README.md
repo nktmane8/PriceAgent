@@ -10,8 +10,8 @@ Type a product and your region. The agent supports Gemini Google Search, Groq br
 - **Effective price** = listed price minus verified instant discounts only; offers listed per store; best-deal card.
 - **Durable async jobs:** production target uses PostgreSQL for job state and Redis/Valkey + a dedicated RQ worker; SQLite/in-process threads remain the local/test fallback.
 - **Durable storage:** PostgreSQL is the production target; SQLite remains the local/test backend. Cache, locks, rate limits and queue state use Redis/Valkey in the distributed target.
-- **OAuth 2.1** (PKCE, dynamic registration, refresh rotation, resource binding) protects browser comparisons and the **remote MCP server** at `/mcp`; partner API keys are also supported.
-- **Safety:** model output validated, `textContent` rendering, input validation, per-IP/user/key limits, Origin/Host checks, secrets from env only.
+- **Google-only OAuth 2.1** (Authorization Code + PKCE, Google identity verification, refresh rotation and resource binding) protects browser comparisons and the **remote MCP server** at `/mcp`. PriceAgent issues its own signed JWT access token; protected REST APIs require that bearer token.
+- **Security:** model output validated, `textContent` rendering, input validation, per-IP/user limits, Origin/Host checks, Google-only identity, signed JWT validation and secrets from env only.
 - **Price history:** every fresh run is recorded; the page shows a 90-day sparkline and the lowest price seen.
 - **Account deletion** (`POST /api/v1/account/delete`), richer admin metrics, offline tests (16), CI, weekly evals harness.
 - **Ops:** `/healthz`, admin stats, Render Blueprint, dedicated worker and release-readiness gate.
@@ -30,20 +30,20 @@ export GROQ_API_KEY="..."                            # PowerShell: $env:GROQ_API
 # Development defaults to automatic fallback: Groq -> Gemini -> Hugging Face -> Ollama -> OpenAI
 uvicorn main:app --reload
 ```
-Open http://127.0.0.1:8000, click **Sign in**, create/login to an account, then enter a product and click **Compare**. Local/test mode uses SQLite; production-like mode uses PostgreSQL + Redis/Valkey.
+Open http://127.0.0.1:8000, click **Sign in**, continue with Google, then enter a product and click **Compare**. Local/test mode uses SQLite; production-like mode uses PostgreSQL + Redis/Valkey.
 Tests (no API key needed): `pip install -r requirements-dev.txt && python -m pytest -q tests`.
-After deploying, check the live app and the MCP endpoint: `python tools/smoke.py https://your-app.onrender.com [--key API_KEY]`.
+After deploying, check the live app and the MCP endpoint with the OAuth smoke tests documented in `docs/RELEASE_READINESS.md`.
 
 ## Deploy on Render
 1. Push to GitHub. In Render: **New > Blueprint**, choose the repo (`render.yaml`).
-2. Enter secrets: `OPENAI_API_KEY`, `PUBLIC_URL` (your exact https URL), `NOMINATIM_CONTACT` (your email); optional `API_KEYS`, `ADMIN_KEY`.
-3. The blueprint uses a paid plan with a 1 GB disk so users, tokens and cache survive restarts (verify current pricing). Run exactly one instance.
+2. Configure `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `JWT_SECRET`, `PUBLIC_URL` (exact https URL), `NOMINATIM_CONTACT`, and the selected AI/provider secrets. `JWT_SECRET` must be a strong random secret and must never be committed.
+3. Provision the PostgreSQL, Valkey/Key Value and dedicated worker defined by the production Blueprint. Keep `FREE_RENDER=false` for the distributed runtime.
 4. Set a monthly spend limit in the OpenAI API platform.
 
 ## Use from AI apps
 - **Claude:** Settings > Connectors > add custom connector `https://your-app/mcp`, then sign in.
-- **REST:** `POST /api/v1/compare` with `Authorization: Bearer <oauth token>` or `X-API-Key`.
-- **Custom GPT:** import `https://your-app/openapi.json`, use OAuth or API key auth.
+- **REST:** `POST /api/v1/compare` with `Authorization: Bearer <PriceAgent JWT access token>`.
+- **Custom GPT:** import `https://your-app/openapi.json` and use OAuth bearer authentication.
 - Directory submissions: `docs/PUBLISHING.md`.
 
 ## Configuration (summary; full table in `docs/CONFIGURATION.md`)
@@ -72,7 +72,7 @@ After deploying, check the live app and the MCP endpoint: `python tools/smoke.py
 | `WORKERS` | 4 | Background threads |
 | `JOB_WAIT_SECONDS` | 50 | Sync/MCP wait before returning a job id |
 | `CACHE_TTL_SECONDS` | 1800 | Cache lifetime |
-| `RATE_LIMIT` / `USER_RATE_LIMIT` / `KEY_RATE_LIMIT` / `LOCATE_LIMIT` | 5 / 30 / 60 / 20 | Per hour: web IP / OAuth user / API key / location lookups |
+| `RATE_LIMIT` / `USER_RATE_LIMIT` / `LOCATE_LIMIT` | 5 / 30 / 20 | Per hour: web IP / OAuth user / location lookups |
 | `API_KEYS` | empty | Comma-separated partner keys |
 | `ADMIN_KEY` | empty | Enables `/api/admin/stats` |
 | `NOMINATIM_CONTACT` | - | Your email/site for OpenStreetMap |
@@ -89,7 +89,7 @@ After deploying, check the live app and the MCP endpoint: `python tools/smoke.py
 - Effective price counts only verified instant discounts, so real offers may be missed.
 - Country is what the user enters or allows; it is not exact location.
 - Price history only has data for products people searched on this deployment.
-- The OAuth server is hand-written and has no email verification or password reset yet. Get it reviewed before a public launch (`docs/SECURITY.md`).
+- Authentication is Google-only. Google verifies the user's identity; PriceAgent then issues its own signed JWT access token for API authorization. The hand-written OAuth server still requires external security review before public launch (`docs/SECURITY.md`).
 - The distributed Postgres/Valkey/worker runtime is implemented but must be provisioned and validated before it is considered production-stable.
 
 ## Apps in this repository
