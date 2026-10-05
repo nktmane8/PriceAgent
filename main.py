@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from starlette.routing import Mount
 
 import config
+from product_identity import normalize
 import db
 import jobs
 import oauth
@@ -320,6 +321,23 @@ def locate(
     result = {"country": addr["country"], "city": city}
     db.cache_set(cache_key, result)
     return result
+
+
+@api.get("/api/product/resolve", include_in_schema=False)
+def resolve_product(product: str = Query(..., min_length=3, max_length=120)):
+    """Resolve shopping text to PriceAgent's conservative canonical product identity."""
+    identity = normalize(product.strip())
+    stored = db.product_get(identity["canonical_key"])
+    return {
+        "canonical_key": identity["canonical_key"],
+        "product": identity["display_name"],
+        "brand": identity["brand"],
+        "variant": identity["variant"],
+        "storage": identity["storage"],
+        "color": identity["color"],
+        "known": stored is not None,
+        "product_id": stored["id"] if stored else None,
+    }
 
 
 @api.get("/api/history", include_in_schema=False)
