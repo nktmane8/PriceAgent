@@ -26,7 +26,7 @@ CREATE INDEX IF NOT EXISTS ix_jobs_key ON jobs(key, status);
 CREATE TABLE IF NOT EXISTS price_history(id INTEGER PRIMARY KEY, key TEXT NOT NULL, store TEXT NOT NULL, price REAL, effective_price REAL, currency TEXT, ts REAL NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_hist ON price_history(key, ts);
 CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY AUTOINCREMENT, canonical_key TEXT UNIQUE NOT NULL, display_name TEXT NOT NULL, brand TEXT, variant TEXT, storage TEXT, color TEXT, created_at REAL NOT NULL, updated_at REAL NOT NULL);
-CREATE INDEX IF NOT EXISTS ix_products_brand ON products(brand);\nCREATE TABLE IF NOT EXISTS analytics_events(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,product TEXT,store TEXT,metadata TEXT,ts REAL NOT NULL);\nCREATE INDEX IF NOT EXISTS ix_analytics_ts ON analytics_events(ts);\nCREATE INDEX IF NOT EXISTS ix_analytics_name ON analytics_events(name);
+CREATE INDEX IF NOT EXISTS ix_products_brand ON products(brand);\nCREATE TABLE IF NOT EXISTS analytics_events(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,client_id TEXT,user_id TEXT,product TEXT,store TEXT,metadata TEXT,ts REAL NOT NULL);\nCREATE INDEX IF NOT EXISTS ix_analytics_ts ON analytics_events(ts);\nCREATE INDEX IF NOT EXISTS ix_analytics_name ON analytics_events(name);
 """
 
 
@@ -80,6 +80,8 @@ def init():
             if "duplicate column name" not in str(e).lower():
                 raise
         # Jobs that were in flight when the process stopped can never finish.
+        c.execute("ALTER TABLE analytics_events ADD COLUMN client_id TEXT")
+        c.execute("ALTER TABLE analytics_events ADD COLUMN user_id TEXT")
         c.execute("UPDATE jobs SET status='error', error='Server restarted. Please retry.', updated_at=? "
                   "WHERE status IN ('queued','running')", (time.time(),))
 
