@@ -12,7 +12,7 @@ from constants import (HISTORY_DAYS, HISTORY_RETENTION_DAYS, HOUR, JOB_RETENTION
                        USAGE_RETENTION_DAYS)
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, email TEXT UNIQUE NOT NULL, pw_hash TEXT NOT NULL, created_at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, email TEXT UNIQUE NOT NULL, pw_hash TEXT, google_sub TEXT UNIQUE, auth_provider TEXT NOT NULL DEFAULT 'password', created_at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS oauth_clients(client_id TEXT PRIMARY KEY, name TEXT NOT NULL, redirect_uris TEXT NOT NULL, created_at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS oauth_requests(id TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES oauth_clients(client_id), redirect_uri TEXT NOT NULL, state TEXT, challenge TEXT NOT NULL, scope TEXT NOT NULL, resource TEXT, expires_at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS oauth_codes(hash TEXT PRIMARY KEY, client_id TEXT NOT NULL, user_id INTEGER NOT NULL REFERENCES users(id), redirect_uri TEXT NOT NULL, challenge TEXT NOT NULL, scope TEXT NOT NULL, resource TEXT, expires_at REAL NOT NULL);
@@ -63,6 +63,17 @@ def init():
     with conn() as c:
         c.execute("PRAGMA journal_mode=WAL")
         c.executescript(SCHEMA)
+        for sql in (
+            "ALTER TABLE users ADD COLUMN google_sub TEXT",
+            "ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT 'password'",
+            "ALTER TABLE users ADD COLUMN pw_hash TEXT",
+        ):
+            try:
+                c.execute(sql)
+            except sqlite3.OperationalError as e:
+                if "duplicate column name" not in str(e).lower():
+                    raise
+        c.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_google_sub ON users(google_sub)")
         try:
             c.execute("ALTER TABLE jobs ADD COLUMN error_code TEXT")
         except sqlite3.OperationalError as e:
