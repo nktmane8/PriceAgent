@@ -5,11 +5,12 @@ import hmac
 import json
 import logging
 import time
+import threading
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-_LOCATION_LOCK = __import__('threading').Lock()
+_LOCATION_LOCK = threading.Lock()
 _LOCATION_LAST_REQUEST = 0.0
 from typing import Literal
 from urllib.parse import urlencode
@@ -202,18 +203,21 @@ def locate(
     last_error = None
     retry_after = None
 
-    # Nominatim is a shared public service. Serialize calls in this process
-    # and keep at least ~1 second between requests to avoid burst traffic.
-    global _LOCATION_LAST_REQUEST
-    with _LOCATION_LOCK:
-        elapsed = time.monotonic() - _LOCATION_LAST_REQUEST
-        if elapsed < 1.1:
-            time.sleep(1.1 - elapsed)
-        _LOCATION_LAST_REQUEST = time.monotonic()
+    # Nominatim is a shared public service. Pace every provider request in this
+    # process so retries cannot create a burst. The lock is held only while
+    # pacing, never while doing network I/O.
+    def pace_location_request():
+        global _LOCATION_LAST_REQUEST
+        with _LOCATION_LOCK:
+            elapsed = time.monotonic() - _LOCATION_LAST_REQUEST
+            if elapsed < 1.1:
+                time.sleep(1.1 - elapsed)
+            _LOCATION_LAST_REQUEST = time.monotonic()
 
     # Nominatim is an external dependency. Retry only transient failures,
     # with a short bounded timeout so the browser is not left waiting.
     for attempt in range(2):
+        pace_location_request()
         try:
             with urllib.request.urlopen(req, timeout=5) as response:
                 if response.status != 200:
@@ -233,7 +237,7 @@ def locate(
             retry_after = e.headers.get("Retry-After")
             transient = e.code in (429, 500, 502, 503, 504)
             logger.warning(
-                "location provider HTTP failure: status=%s attempt=%s/3 retryable=%s",
+                "location provider HTTP failure: status=%s attempt=%s/2 retryable=%s",
                 e.code, attempt + 1, transient,
             )
             if not transient or attempt == 1:
@@ -246,7 +250,7 @@ def locate(
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as e:
             last_error = e
             logger.warning(
-                "location provider failure: type=%s attempt=%s/3",
+                "location provider failure: type=%s attempt=%s/2",
                 type(e).__name__, attempt + 1,
             )
             if attempt == 1:
