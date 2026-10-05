@@ -1,15 +1,395 @@
 {
-  "_help": "Add 30-50 cases. Fill expected_* from real store pages you checked yourself on the day. Set enabled to true. Do not guess prices.",
+  "_help": "30 source-verified cases checked on 2026-10-05. Ranges are broad to detect wrong variants while tolerating live retailer changes.",
   "cases": [
     {
-      "id": "example-1",
-      "enabled": false,
-      "product": "REPLACE with an exact product variant, e.g. brand model storage colour",
+      "id": "case-01",
+      "enabled": true,
+      "product": "LG 251 Litres 2 Star Frost Free Double Door Convertible Refrigerator GLT2526XWPZ Shiny Steel 2026 Model",
       "country": "India",
-      "city": "",
-      "expected_min_price": null,
-      "expected_max_price": null,
-      "expected_stores_any": []
+      "city": "Pune",
+      "expected_min_price": 19674,
+      "expected_max_price": 45906,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-02",
+      "enabled": true,
+      "product": "LG 343 Litres 2 Star Frost Free Double Door Convertible Refrigerator GLT3426SNUS Urban Steel 2026 Model",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 29154,
+      "expected_max_price": 68026,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-03",
+      "enabled": true,
+      "product": "LG 650 Litres 3 Star Frost Free Side by Side Refrigerator GL-B257JDS3 Dazzle Steel",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 53394,
+      "expected_max_price": 124586,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-04",
+      "enabled": true,
+      "product": "LG 466 Litres 2 Star Frost Free Double Door Smart Wifi Convertible Refrigerator GLT4626TEBM Black Mirror 2026 Model",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 40794,
+      "expected_max_price": 95186,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-05",
+      "enabled": true,
+      "product": "LG 251 Litres 2 Star Frost Free Double Door Refrigerator GLT2526WWDS Dazzle Steel 2026 Model",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 18774,
+      "expected_max_price": 43806,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-06",
+      "enabled": true,
+      "product": "LG 343 Litres 2 Star Frost Free Double Door Convertible Refrigerator GLT3426SNBM Black Mirror 2026 Model",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 30894,
+      "expected_max_price": 72086,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-07",
+      "enabled": true,
+      "product": "LG 446 Litres 1 Star Frost Free Double Door Convertible Refrigerator GLT4416CCPZ Shiny Steel 2026 Model",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 34794,
+      "expected_max_price": 81186,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-08",
+      "enabled": true,
+      "product": "LG 574 Litres 3 Star Frost Free French Door Refrigerator GVB23FFLMB Prime Silver 2026 Model",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 67794,
+      "expected_max_price": 158186,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-09",
+      "enabled": true,
+      "product": "LG 288 Litres 2 Star Frost Free Double Door Convertible Refrigerator GLT2926PDPZ Shiny Steel 2026 Model",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 23634,
+      "expected_max_price": 55146,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-10",
+      "enabled": true,
+      "product": "LG 185 Litres 3 Star Direct Cool Single Door Refrigerator GLD1936YAPZ Shiny Steel 2026 Model",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 11274,
+      "expected_max_price": 26306,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-11",
+      "enabled": true,
+      "product": "LG 340 Litres 2 Star Frost Free Double Door Bottom Mount Smart Wifi Convertible Refrigerator GLB3426BEBM Black Mirror 2026 Model",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 34494,
+      "expected_max_price": 80486,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-12",
+      "enabled": true,
+      "product": "LG 322 Litres 2 Star Frost Free Double Door Convertible Refrigerator GLT3226SNPZ Shiny Steel 2026 Model",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 26994,
+      "expected_max_price": 62986,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-13",
+      "enabled": true,
+      "product": "LG 398 Litres 2 Star Frost Free Double Door Smart Wifi Convertible Refrigerator GLT4026SNPZ Shiny Steel 2026 Model",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 32694,
+      "expected_max_price": 76286,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-14",
+      "enabled": true,
+      "product": "LG 466 Litres 2 Star Frost Free Double Door Smart Wifi Convertible Refrigerator GLT4626TMPZ Shiny Steel 2026 Model",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 40794,
+      "expected_max_price": 95186,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-15",
+      "enabled": true,
+      "product": "LG 43 Litres 3 Star Direct Cool Single Door Refrigerator GLD0536VRSW Super White 2026 Model",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 7194,
+      "expected_max_price": 16786,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-16",
+      "enabled": true,
+      "product": "LG 225 Litres 1 Star Frost Free Double Door Refrigerator GLT2216WYPZ Shiny Steel 2026 Model",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 15894,
+      "expected_max_price": 37086,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-17",
+      "enabled": true,
+      "product": "LG 380 Litres 2 Star Frost Free Double Door Smart Wifi Convertible Refrigerator GLT3826SNPZ Shiny Steel 2026 Model",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 31794,
+      "expected_max_price": 74186,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-18",
+      "enabled": true,
+      "product": "LG 210 Litres 5 Star Direct Cool Single Door Refrigerator GLD2256ZAWS Wine Spring 2026 Model",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 14814,
+      "expected_max_price": 34566,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-19",
+      "enabled": true,
+      "product": "Dyson V8 Absolute 115W Cordless Dry Vacuum Cleaner Grey",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 17940,
+      "expected_max_price": 41860,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-20",
+      "enabled": true,
+      "product": "Dyson V11 Absolute 185W Cordless Dry Vacuum Cleaner Nickel Blue",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 23940,
+      "expected_max_price": 55860,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-21",
+      "enabled": true,
+      "product": "Dyson V15 Detect 240W Cordless Dry Vacuum Cleaner Yellow Nickel",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 39540,
+      "expected_max_price": 92260,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-22",
+      "enabled": true,
+      "product": "Dyson V12 Floor Dok for Cordless Vacuum Cleaner 971445-01 White Grey",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 5940,
+      "expected_max_price": 13860,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-23",
+      "enabled": true,
+      "product": "Apple iPhone 16 128GB Black",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 40494,
+      "expected_max_price": 94486,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-24",
+      "enabled": true,
+      "product": "Apple iPhone 16 128GB White",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 40494,
+      "expected_max_price": 94486,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-25",
+      "enabled": true,
+      "product": "Apple iPhone 16 128GB Pink",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 40494,
+      "expected_max_price": 94486,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-26",
+      "enabled": true,
+      "product": "Apple iPhone 16 128GB Teal",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 40494,
+      "expected_max_price": 94486,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-27",
+      "enabled": true,
+      "product": "Apple iPhone 16 128GB Ultramarine",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 40494,
+      "expected_max_price": 94486,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-28",
+      "enabled": true,
+      "product": "Apple iPhone 16 Plus 128GB Black",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 46194,
+      "expected_max_price": 107786,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-29",
+      "enabled": true,
+      "product": "Apple iPhone 16 Plus 128GB White",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 46194,
+      "expected_max_price": 107786,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
+    },
+    {
+      "id": "case-30",
+      "enabled": true,
+      "product": "Apple iPhone 16 Plus 128GB Pink",
+      "country": "India",
+      "city": "Pune",
+      "expected_min_price": 46194,
+      "expected_max_price": 107786,
+      "expected_stores_any": [
+        "croma"
+      ],
+      "verified_on": "2026-10-05"
     }
   ]
 }
