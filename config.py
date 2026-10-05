@@ -114,8 +114,8 @@ def problems() -> list[str]:
             p.append("JWT_SECRET must be at least 32 characters in staging/production")
         if not PUBLIC_URL.startswith("https://"):
             p.append("PUBLIC_URL must be an https URL")
-        if not os.path.isabs(DB_PATH):
-            p.append("DATABASE_PATH must be an absolute path on a persistent disk")
+        if not DATABASE_URL and not os.path.isabs(DB_PATH):
+            p.append("DATABASE_PATH must be an absolute path when PostgreSQL is not configured")
         if NOMINATIM_CONTACT.startswith("set-"):
             p.append("NOMINATIM_CONTACT must be your email or website")
         if ADMIN_KEY and len(ADMIN_KEY) < 20:
