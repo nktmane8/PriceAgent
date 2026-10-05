@@ -266,6 +266,15 @@ function render(data) {
     if (kind) c.append(el("div", kind, "muted"));
     c.append(el("div", "Listed price: " + money(item.price, cur), "muted"));
     if (item.in_stock === false) c.append(el("div", "Out of stock", "oos"));
+    if (item.store_rating != null) c.append(el("div", "Store rating: " + Number(item.store_rating).toFixed(1) + (item.rating_count ? " (" + Number(item.rating_count).toLocaleString() + " ratings)" : ""), "muted"));
+    if (item.deal_type) c.append(el("div", "Deal: " + item.deal_type, "muted"));
+    if (item.address) c.append(el("div", item.address, "muted"));
+    if (item.phone) {
+      const p = el("a", "Call store: " + item.phone, "open");
+      p.href = "tel:" + item.phone.replace(/[^+\d]/g, "");
+      p.rel = "noopener noreferrer";
+      c.append(p);
+    }
     if (Array.isArray(item.offers) && item.offers.length) {
       const ul = el("ul");
       item.offers.forEach(o => ul.append(el("li", String(o))));
@@ -396,6 +405,19 @@ function renderInsights(d) {
   insights.replaceChildren();
   if (d.verdict) { const c = card("Why people buy it"); c.append(el("div", d.verdict)); insights.append(c); }
   if (d.overall_review) { const c = card("Overall product review"); c.append(el("div", d.overall_review)); insights.append(c); }
+  const youtube = Array.isArray(d.youtube_reviews) ? d.youtube_reviews : [];
+  if (youtube.length) {
+    const c = card("YouTube reviews");
+    youtube.slice(0, 6).forEach(v => {
+      const title = v.title || "YouTube review";
+      const row = el("div", undefined, "row");
+      row.append(el("span", title, "site"), el("span", v.reviewer || "YouTube", "muted"));
+      c.append(row);
+      if (v.summary) c.append(el("div", v.summary, "muted"));
+      const a = openLink("Watch review", v.url); if (a) c.append(a);
+    });
+    insights.append(c);
+  }
   if (Array.isArray(d.rating_sources) && d.rating_sources.length) {
     const c = card("Ratings across sources");
     for (const r of d.rating_sources) {
