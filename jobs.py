@@ -33,6 +33,10 @@ class RateLimited(Exception):
     def __init__(self, minutes):
         self.minutes = minutes
 
+
+class QueueUnavailable(Exception):
+    """Raised when the distributed job queue cannot accept a job."""
+
 def _redis():
     if not config.REDIS_URL or Redis is None:
         return None
