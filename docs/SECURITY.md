@@ -9,7 +9,7 @@
 - Prompt injection: the system prompt marks page content as data, and output cleaning limits damage. It cannot be eliminated.
 - Persisted rate limits per IP, user and key; hard cap on searches per comparison; admin stats behind a key.
 
-## Known gaps (do before real users)
+## Known gaps (release blockers / follow-ups)
 - No email verification or password reset (account deletion exists via API). Add them or delegate sign-in to an identity provider.
 - Registration is open (rate limited) and there are no admin tools to revoke clients.
 - Auth-code replay does not revoke already issued tokens.
