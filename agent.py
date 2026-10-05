@@ -3,12 +3,15 @@ import json
 import math
 import os
 import re
+import threading
 
 import openai
 from openai import OpenAI
 
 import config
 from constants import MAX_ALTERNATIVES, MAX_OFFERS, MAX_RESULTS, MAX_REVIEWS, REVIEW_SOURCE_TYPES
+
+_AI_SEMAPHORE = threading.Semaphore(config.AI_CONCURRENCY)
 
 SYSTEM_PROMPT = """You are a regional price comparison agent.
 Rules:
@@ -149,13 +152,14 @@ def _converse(system, prompt, max_uses, max_tokens):
     client = OpenAI(api_key=api_key, timeout=120.0)
     usage = {"input_tokens": 0, "output_tokens": 0, "searches": 0}
     try:
-        response = client.responses.create(
-            model=config.MODEL,
-            instructions=system,
-            input=prompt,
-            tools=[{"type": "web_search"}],
-            max_output_tokens=max_tokens,
-        )
+        with _AI_SEMAPHORE:
+            response = client.responses.create(
+                model=config.MODEL,
+                instructions=system,
+                input=prompt,
+                tools=[{"type": "web_search"}],
+                max_output_tokens=max_tokens,
+            )
         u = response.usage
         usage["input_tokens"] = getattr(u, "input_tokens", 0) or 0
         usage["output_tokens"] = getattr(u, "output_tokens", 0) or 0
