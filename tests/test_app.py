@@ -234,11 +234,15 @@ def test_env_loader_precedence_and_production_checks(tmp_path, monkeypatch):
 
 
 def test_rest_job_is_owned_by_creator(client):
-    first = client.post("/api/v1/compare", json=BODY, headers={"X-API-Key": "testkey"})
+    cid1, ver1, r1 = sign_in(client, email="owner-one@example.com")
+    tok1 = exchange(client, cid1, ver1, r1).json()["access_token"]
+    cid2, ver2, r2 = sign_in(client, email="owner-two@example.com")
+    tok2 = exchange(client, cid2, ver2, r2).json()["access_token"]
+    first = client.post("/api/v1/compare", json=BODY, headers={"Authorization": "Bearer " + tok1})
     assert first.status_code == 200
     jid = first.json()["job_id"]
-    assert client.get("/api/v1/jobs/" + jid, headers={"X-API-Key": "testkey"}).status_code == 200
-    assert client.get("/api/v1/jobs/" + jid, headers={"X-API-Key": "different-key"}).status_code == 401
+    assert client.get("/api/v1/jobs/" + jid, headers={"Authorization": "Bearer " + tok1}).status_code == 200
+    assert client.get("/api/v1/jobs/" + jid, headers={"Authorization": "Bearer " + tok2}).status_code == 403
 
 
 def test_oauth_requires_explicit_resource(client):
