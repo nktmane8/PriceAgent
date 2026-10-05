@@ -44,9 +44,13 @@ services:
         sync: false
       - key: PUBLIC_URL
         sync: false
-      - key: API_KEYS
-        sync: false
       - key: ADMIN_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: NOMINATIM_CONTACT
         sync: false
