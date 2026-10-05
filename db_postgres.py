@@ -27,7 +27,7 @@ SCHEMA=[
 "CREATE TABLE IF NOT EXISTS cache(key TEXT PRIMARY KEY,value TEXT NOT NULL,expires_at DOUBLE PRECISION NOT NULL)",
 "CREATE TABLE IF NOT EXISTS usage(id BIGSERIAL PRIMARY KEY,principal TEXT NOT NULL,ts DOUBLE PRECISION NOT NULL)",
 "CREATE INDEX IF NOT EXISTS ix_usage ON usage(principal,ts)",
-"CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,key TEXT NOT NULL,status TEXT NOT NULL,product TEXT,country TEXT,city TEXT,sites TEXT,principal TEXT,result TEXT,error TEXT,source TEXT,input_tokens INTEGER DEFAULT 0,output_tokens INTEGER DEFAULT 0,searches INTEGER DEFAULT 0,created_at DOUBLE PRECISION NOT NULL,updated_at DOUBLE PRECISION NOT NULL)",
+"CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,key TEXT NOT NULL,status TEXT NOT NULL,product TEXT,country TEXT,city TEXT,sites TEXT,principal TEXT,result TEXT,error TEXT,error_code TEXT,source TEXT,input_tokens INTEGER DEFAULT 0,output_tokens INTEGER DEFAULT 0,searches INTEGER DEFAULT 0,created_at DOUBLE PRECISION NOT NULL,updated_at DOUBLE PRECISION NOT NULL)",
 "CREATE INDEX IF NOT EXISTS ix_jobs_key ON jobs(key,status)",
 "CREATE TABLE IF NOT EXISTS price_history(id BIGSERIAL PRIMARY KEY,key TEXT NOT NULL,store TEXT NOT NULL,price DOUBLE PRECISION,effective_price DOUBLE PRECISION,currency TEXT,ts DOUBLE PRECISION NOT NULL)",
 "CREATE INDEX IF NOT EXISTS ix_hist ON price_history(key,ts)"
@@ -48,6 +48,7 @@ def tx():
 def init():
     with psycopg.connect(config.DATABASE_URL) as c:
         for s in SCHEMA:c.execute(s)
+        c.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS error_code TEXT")
         c.commit()
 
 def recover_stale_jobs(max_age):
