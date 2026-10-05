@@ -69,7 +69,7 @@ button:disabled{opacity:.55;cursor:wait;transform:none}
 .best .price{color:#fff}
 @keyframes rise{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
 .card h2{font-size:15px;letter-spacing:-.015em;margin:0 0 12px}.row{display:flex;justify-content:space-between;align-items:baseline;gap:14px}.site{font-weight:750}.price{font-size:22px;font-weight:850;letter-spacing:-.04em}.muted{color:var(--muted);font-size:12px}.oos{color:#b42318;font-size:12px}ul{margin:9px 0;padding-left:18px}a.open{display:inline-block;margin-top:10px;padding:9px 12px;font-size:12px}
-.seller-box{margin-top:14px;padding:12px;background:var(--soft);border:1px solid var(--line)}.seller-title{font-size:10px;text-transform:uppercase;letter-spacing:.12em;font-weight:800;color:var(--accent);margin-bottom:4px}.seller-name{font-weight:800;margin-bottom:3px}.seller-box ul{margin-bottom:4px}.history{grid-column:1/-1}.history h2{font-size:15px}.history svg{display:block;width:100%;height:110px;margin-top:10px}.history .spark{fill:none;stroke:var(--accent);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}.history .grid{stroke:var(--line);stroke-width:1}.history circle{fill:#fff;stroke:var(--accent);stroke-width:2}.caption{display:flex;justify-content:space-between;gap:12px;margin-top:4px}
+.variant-panel{grid-column:1/-1}.variant-panel li{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.variant-panel a.open{margin-top:0}.seller-box{margin-top:14px;padding:12px;background:var(--soft);border:1px solid var(--line)}.seller-title{font-size:10px;text-transform:uppercase;letter-spacing:.12em;font-weight:800;color:var(--accent);margin-bottom:4px}.seller-name{font-weight:800;margin-bottom:3px}.seller-box ul{margin-bottom:4px}.history{grid-column:1/-1}.history h2{font-size:15px}.history svg{display:block;width:100%;height:110px;margin-top:10px}.history .spark{fill:none;stroke:var(--accent);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}.history .grid{stroke:var(--line);stroke-width:1}.history circle{fill:#fff;stroke:var(--accent);stroke-width:2}.caption{display:flex;justify-content:space-between;gap:12px;margin-top:4px}
 #ins{margin:22px 0 0;width:auto}.footer{margin-top:42px;padding-top:18px;border-top:1px solid var(--line);color:#888;font-size:11px;text-align:left;max-width:900px}
 @media(max-width:900px){main{padding:0 18px 50px}.card{grid-column:span 6}.search-hero{padding-top:45px}}
 @media(max-width:620px){main{padding:0 12px 38px}.topbar{height:62px}.navlink{display:none}.hero-actions{gap:2px}.live{display:none}.search-hero{padding:40px 0 30px}.search-hero h2{font-size:40px}.line{flex-direction:column}.line:last-of-type{flex-direction:row}.line button{width:100%}.card{grid-column:1/-1}.discovery{align-items:flex-start;flex-direction:column;gap:4px}}
@@ -97,17 +97,6 @@ button:disabled{opacity:.55;cursor:wait;transform:none}
   </form><div class="hint"><span class="chip">Live store discovery</span><span class="chip">Effective price</span><span class="chip">90-day history</span><span class="chip">AI reviews</span><span class="chip">Local deals</span></div></section>
 </section>
 <div class="discovery"><strong>One search. A clearer buying decision.</strong><span>Online retailers · Local stores · Trusted ratings · YouTube reviews · Similar products</span></div>
-    <div class="line">
-      <input id="q" type="text" minlength="3" maxlength="120" required
-             placeholder="Product, e.g. iPhone 15 128GB Black" aria-label="Product name">
-      <button id="go" type="submit">Compare</button>
-    </div>
-    <div class="line">
-      <input id="country" type="text" minlength="2" maxlength="60" required aria-label="Country" placeholder="Country">
-      <input id="city" type="text" maxlength="60" aria-label="City or area (optional)" placeholder="City or area (optional)">
-    </div>
-    <button id="loc" type="button" class="alt">Use my location</button>
-  </form><div class="hint"><span class="chip">● Live store discovery</span><span class="chip">✓ Effective price</span><span class="chip">↗ 90-day history</span><span class="chip">⚡ OAuth + MCP ready</span></div></section>
   <div id="status" role="status"></div>
   <div id="out"></div>
   <button id="ins" type="button" class="alt" hidden>Why buy this? Reviews and similar products</button>
@@ -216,9 +205,7 @@ function setToken(d) {
   if (d.refresh_token) sessionStorage.setItem(OAUTH.refresh, d.refresh_token);
   sessionStorage.setItem(OAUTH.expiry, String(Date.now() + (Number(d.expires_in || 3600) * 1000)));
 }
-async function ensureClient() {
-  let id = localStorage.getItem(OAUTH.client);
-  if (id) return id;
+async async function ensureClient() {
   const d = await call("/oauth/register", {
     method: "POST", headers: {"Content-Type":"application/json"},
     body: JSON.stringify({client_name:"PriceAgent Web", redirect_uris:[REDIRECT_URI]})
@@ -323,6 +310,23 @@ function render(data) {
 
   if (data.region) out.append(el("div", "Showing stores for: " + data.region, "muted"));
 
+  const variants = Array.isArray(data.variants) ? data.variants : [];
+  if (variants.length > 1) {
+    const vc = el("div", undefined, "card variant-panel");
+    vc.append(el("h2", "Verified variants and prices"));
+    vc.append(el("div", "Different variants are shown separately. PriceAgent does not compare one variant against another.", "muted"));
+    const ul = el("ul");
+    variants.slice(0, 12).forEach(v => {
+      const li = el("li");
+      li.append(el("span", [v.name, v.attributes].filter(Boolean).join(" · ") + " — " + money(v.price, v.currency || cur)));
+      if (v.store) li.append(el("span", " · " + v.store, "muted"));
+      const a = openLink("View", v.url); if (a) li.append(a);
+      ul.append(li);
+    });
+    vc.append(ul);
+    out.append(vc);
+  }
+
   if (data.best_deal && data.best_deal.site) {
     const b = el("div", undefined, "card best");
     b.append(el("div", "Best deal", "muted"));
@@ -337,7 +341,7 @@ function render(data) {
     const r = el("div", undefined, "row");
     r.append(el("span", item.site || "Unknown store", "site"), el("span", money(item.effective_price, cur), "price"));
     c.append(r);
-    const kind = [item.store_type, item.location].filter(Boolean).join(", ");
+    const kind = [item.store_type, item.location, item.variant_name ? "Variant: " + item.variant_name : ""].filter(Boolean).join(", ");
     if (kind) c.append(el("div", kind, "muted"));
     c.append(el("div", "Listed price: " + money(item.price, cur), "muted"));
     if (item.in_stock === false) c.append(el("div", "Out of stock", "oos"));
