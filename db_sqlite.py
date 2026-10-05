@@ -253,3 +253,37 @@ def stats():
                 "avg_agent_seconds": round(one("SELECT COALESCE(AVG(updated_at-created_at),0) FROM jobs "
                                                "WHERE status='done' AND source='agent'"), 1),
                 "top_errors": errors, "by_principal_type": by_type}
+
+
+def analytics_event_create(name, client_id, user_id, product, store, metadata, ts):
+    with conn() as c:
+        c.execute(
+            "INSERT INTO analytics_events(name,client_id,user_id,product,store,metadata,ts) VALUES(?,?,?,?,?,?,?)",
+            (name, client_id, user_id, product, store, json.dumps(metadata or {}), ts),
+        )
+
+
+def analytics_dashboard(days=30):
+    since=time.time()-days*86400
+    with conn() as c:
+        totals=c.execute(
+            "SELECT COUNT(*) AS events,COUNT(DISTINCT client_id) AS visitors FROM analytics_events WHERE ts>?",
+            (since,),
+        ).fetchone()
+        events=[dict(r) for r in c.execute(
+            "SELECT name,COUNT(*) AS count FROM analytics_events WHERE ts>? GROUP BY name ORDER BY count DESC",
+            (since,),
+        )]
+        products=[dict(r) for r in c.execute(
+            "SELECT product,COUNT(*) AS count FROM analytics_events WHERE ts>? AND product IS NOT NULL GROUP BY product ORDER BY count DESC LIMIT 10",
+            (since,),
+        )]
+        stores=[dict(r) for r in c.execute(
+            "SELECT store,COUNT(*) AS count FROM analytics_events WHERE ts>? AND store IS NOT NULL GROUP BY store ORDER BY count DESC LIMIT 10",
+            (since,),
+        )]
+        daily=[dict(r) for r in c.execute(
+            "SELECT date(ts,'unixepoch') AS day,COUNT(*) AS count FROM analytics_events WHERE ts>? GROUP BY day ORDER BY day",
+            (since,),
+        )]
+    return {"window_days":days,"totals":dict(totals),"events":events,"top_products":products,"top_stores":stores,"daily":daily}
