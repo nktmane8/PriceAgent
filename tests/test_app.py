@@ -237,3 +237,19 @@ def test_mcp_token_cannot_be_used_for_rest(client):
 
 def test_loopback_redirect_rules_reject_public_http(client):
     assert client.post("/oauth/register", json={"redirect_uris": ["http://priceagent.onrender.com/callback"]}).status_code == 400
+
+
+def test_all_business_api_routes_require_priceagent_jwt(client):
+    checks = [
+        ("post", "/api/jobs", {"json": BODY}),
+        ("get", "/api/jobs/not-found", {}),
+        ("post", "/api/v1/compare", {"json": BODY}),
+        ("get", "/api/v1/jobs/not-found", {}),
+        ("post", "/api/v1/account/delete", {"json": {}}),
+        ("get", "/api/locate?lat=18.62&lon=73.73", {}),
+        ("get", "/api/product/resolve?product=Phone%20X%20128GB", {}),
+        ("get", "/api/history?product=Phone%20X%20128GB&country=India&city=Pune", {}),
+    ]
+    for method, path, kwargs in checks:
+        response = getattr(client, method)(path, **kwargs)
+        assert response.status_code == 401, (method, path, response.status_code)
