@@ -2,7 +2,9 @@
 import hashlib, logging, threading, time
 from concurrent.futures import ThreadPoolExecutor
 import agent, config, db
-from constants import DONE, ERROR, FINISHED, KIND_INSIGHTS, KIND_PRICES, PURGE_INTERVAL, RUNNING
+from constants import (DONE, ERROR, FINISHED, KIND_INSIGHTS, KIND_PRICES, PURGE_INTERVAL, RUNNING,
+                       AI_QUOTA_EXHAUSTED, AI_PROVIDER_EXHAUSTED, INVALID_PROVIDER_RESPONSE, JOB_FAILED,
+                       QUEUE_UNAVAILABLE, INTERNAL_ERROR)
 
 try:
     from redis import Redis
@@ -14,6 +16,18 @@ log = logging.getLogger("price-agent")
 _pool = ThreadPoolExecutor(max_workers=config.WORKERS, thread_name_prefix="agent")
 _submit_lock = threading.Lock()
 _stop = threading.Event()
+
+def _error_code(exc):
+    """Map internal failures to a stable, non-provider-specific job error code."""
+    message = str(exc).lower()
+    if "quota" in message or "billing" in message:
+        return AI_QUOTA_EXHAUSTED
+    if "all configured ai providers" in message:
+        return AI_PROVIDER_EXHAUSTED
+    if "valid results" in message or "unexpected format" in message:
+        return INVALID_PROVIDER_RESPONSE
+    return JOB_FAILED
+
 
 class RateLimited(Exception):
     def __init__(self, minutes):
@@ -54,7 +68,7 @@ def submit(params, principal, limit):
                 q.enqueue(_work,jid,key,params,job_id=jid,result_ttl=config.JOB_RESULT_TTL,failure_ttl=config.JOB_FAILURE_TTL)
             except Exception:
                 log.exception("queue enqueue failed for job %s", jid)
-                db.job_update(jid,status=ERROR,error="QUEUE_UNAVAILABLE")
+                db.job_update(jid,status=ERROR,error="The job queue is temporarily unavailable. Please retry.",error_code=QUEUE_UNAVAILABLE)
                 raise
         else:
             _pool.submit(_work,jid,key,params)
@@ -70,10 +84,10 @@ def _work(jid,key,params):
             db.record_history(db.history_key(params["product"],params["country"],params["city"]),data)
         db.job_update(jid,status=DONE,result=data,source="agent",**usage)
     except agent.AgentError as e:
-        db.job_update(jid,status=ERROR,error=str(e))
+        db.job_update(jid,status=ERROR,error=str(e),error_code=_error_code(e))
     except Exception:
         log.exception("job %s crashed",jid)
-        db.job_update(jid,status=ERROR,error="Unexpected server error. Please retry.")
+        db.job_update(jid,status=ERROR,error="Unexpected server error. Please retry.",error_code=INTERNAL_ERROR)
 
 def wait(jid,timeout):
     end=time.time()+timeout
@@ -89,6 +103,7 @@ def view(job):
         out["result"],out["cached"]=job["result"],job["source"]=="cache"
     if job["status"]==ERROR:
         out["error"]=job["error"]
+        out["error_code"]=job.get("error_code") or JOB_FAILED
     return out
 
 def start_purger(interval=PURGE_INTERVAL):
