@@ -41,7 +41,7 @@ Switch environment: `APP_ENV=staging uvicorn main:app`.
 | `PORT` | no | set by host | n/a | n/a | host | host |
 
 ## Start-up checks (`config.problems()`)
-Always: missing `OPENAI_API_KEY`. Staging/production also: `PUBLIC_URL` not https; `DATABASE_PATH` not absolute; `NOMINATIM_CONTACT` unset; `API_KEYS` or `ADMIN_KEY` shorter than 20 characters. They stop the app there; elsewhere they log warnings.
+Always: missing `OPENAI_API_KEY`. Staging/production also require an HTTPS `PUBLIC_URL`, absolute `DATABASE_PATH` when using the SQLite fallback, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, a 32+ character `JWT_SECRET`, and `NOMINATIM_CONTACT`. The distributed runtime also requires `DATABASE_URL` and `REDIS_URL` when `FREE_RENDER=false`. They stop the app there; elsewhere they log warnings.
 
 ## Global constants (`constants.py`)
 Not environment-specific; change only with a code review.
