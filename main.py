@@ -152,8 +152,16 @@ def delete_account(body: "DeleteAccount", bearer: str | None = Depends(oauth2)):
 
 
 # ---- helpers ---------------------------------------------------------------------------
-@api.get("/api/locate", include_in_schema=False)
-def locate(request: Request, lat: float = Query(..., ge=-90, le=90), lon: float = Query(..., ge=-180, le=180)):
+@api.get(
+    "/api/locate",
+    summary="Reverse geocode coordinates",
+    description="Convert latitude and longitude into a country and city using OpenStreetMap Nominatim.",
+)
+def locate(
+    request: Request,
+    lat: float = Query(..., ge=-90, le=90, description="Latitude"),
+    lon: float = Query(..., ge=-180, le=180, description="Longitude"),
+):
     """Coordinates -> country + city via OpenStreetMap Nominatim. Rounded to ~1 km and cached for CACHE_TTL seconds."""
     wait = db.rate_check("loc:" + client_ip(request), config.LOCATE_LIMIT)
     if wait:
