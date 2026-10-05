@@ -155,3 +155,38 @@ def stats():
         by_type={r["t"]:{"jobs":r["jobs"],"searches":r["s"]} for r in c.execute("SELECT split_part(principal,':',1) AS t,COUNT(*) AS jobs,COALESCE(SUM(searches),0) AS s FROM jobs GROUP BY t")}
         q=lambda x:c.execute(x).fetchone()["v"]
         return {"jobs":jobs,"users":q("SELECT COUNT(*) AS v FROM users"),"oauth_clients":q("SELECT COUNT(*) AS v FROM oauth_clients"),"cache_entries":q("SELECT COUNT(*) AS v FROM cache"),"price_history_rows":q("SELECT COUNT(*) AS v FROM price_history"),"input_tokens":q("SELECT COALESCE(SUM(input_tokens),0) AS v FROM jobs"),"output_tokens":q("SELECT COALESCE(SUM(output_tokens),0) AS v FROM jobs"),"web_searches":s,"search_cost_usd_estimate":round(s*SEARCH_COST_USD,2),"cache_hit_rate":round(cached/done,3) if done else None,"avg_agent_seconds":round(q("SELECT COALESCE(AVG(updated_at-created_at),0) AS v FROM jobs WHERE status='done' AND source='agent'"),1),"top_errors":errors,"by_principal_type":by_type}
+
+
+def analytics_event_create(name, client_id, user_id, product, store, metadata, ts):
+    with conn() as c:
+        c.execute(
+            "INSERT INTO analytics_events(name,product,store,metadata,ts) VALUES(%s,%s,%s,%s,%s)",
+            (name, product, store, json.dumps(metadata or {}), ts),
+        )
+        c.commit()
+
+
+def analytics_dashboard(days=30):
+    since=time.time()-days*86400
+    with conn() as c:
+        totals=c.execute(
+            "SELECT COUNT(*) AS events,COUNT(DISTINCT client_id) AS visitors FROM analytics_events WHERE ts>%s",
+            (since,),
+        ).fetchone()
+        events=[dict(r) for r in c.execute(
+            "SELECT name,COUNT(*) AS count FROM analytics_events WHERE ts>%s GROUP BY name ORDER BY count DESC",
+            (since,),
+        )]
+        products=[dict(r) for r in c.execute(
+            "SELECT product,COUNT(*) AS count FROM analytics_events WHERE ts>%s AND product IS NOT NULL GROUP BY product ORDER BY count DESC LIMIT 10",
+            (since,),
+        )]
+        stores=[dict(r) for r in c.execute(
+            "SELECT store,COUNT(*) AS count FROM analytics_events WHERE ts>%s AND store IS NOT NULL GROUP BY store ORDER BY count DESC LIMIT 10",
+            (since,),
+        )]
+        daily=[dict(r) for r in c.execute(
+            "SELECT to_timestamp(ts)::date AS day,COUNT(*) AS count FROM analytics_events WHERE ts>%s GROUP BY day ORDER BY day",
+            (since,),
+        )]
+    return {"window_days":days,"totals":dict(totals),"events":events,"top_products":products,"top_stores":stores,"daily":daily}
