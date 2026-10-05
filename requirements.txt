@@ -4,3 +4,6 @@ openai>=1.0
 pydantic>=2.6
 mcp>=1.9,<2
 requests>=2.31
+psycopg[binary]>=3.2
+redis>=6.4
+rq>=2.6
