@@ -1,6 +1,6 @@
-# Runbook
+# Runbook\n\n## Release status\n\nThe Python implementation must be stabilized before Java migration. The repository contains the Postgres + Valkey + worker implementation and Render Blueprint, but the current Render workspace must still be provisioned and validated as a distributed deployment. Do not call the application production-stable until `docs/RELEASE_READINESS.md` is green.\n\nRender Background Workers are designed to consume asynchronous work from a queue, and Render Key Value provides Redis-compatible queue/cache storage.
 
-## Deploy / rollback
+## Deploy / rollback\n\nFor the stable target, deploy the web service and dedicated worker with shared PostgreSQL and Valkey. Verify the worker is consuming jobs before enabling real user traffic.
 Push to GitHub; Render builds from `render.yaml`. Roll back from the Render dashboard. Keep `WORKERS` and a single instance; never run more than one process.
 
 ## Backups
