@@ -80,8 +80,13 @@ def init():
             if "duplicate column name" not in str(e).lower():
                 raise
         # Jobs that were in flight when the process stopped can never finish.
-        c.execute("ALTER TABLE analytics_events ADD COLUMN client_id TEXT")
-        c.execute("ALTER TABLE analytics_events ADD COLUMN user_id TEXT")
+        for sql in ("ALTER TABLE analytics_events ADD COLUMN client_id TEXT",
+                    "ALTER TABLE analytics_events ADD COLUMN user_id TEXT"):
+            try:
+                c.execute(sql)
+            except sqlite3.OperationalError as e:
+                if "duplicate column name" not in str(e).lower():
+                    raise
         c.execute("UPDATE jobs SET status='error', error='Server restarted. Please retry.', updated_at=? "
                   "WHERE status IN ('queued','running')", (time.time(),))
 
