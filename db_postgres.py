@@ -50,6 +50,14 @@ def init():
         for s in SCHEMA:c.execute(s)
         c.commit()
 
+def recover_stale_jobs(max_age):
+    """Mark jobs stuck in running state after a worker/process loss."""
+    cutoff = time.time() - max_age
+    with tx() as c:
+        c.execute("UPDATE jobs SET status='error', error='Worker lost while processing the job. Please retry.', updated_at=%s WHERE status='running' AND updated_at<%s",
+                  (time.time(), cutoff))
+
+
 def cache_get(key):
     with conn() as c:r=c.execute("SELECT value FROM cache WHERE key=%s AND expires_at>%s",(key,time.time())).fetchone()
     return json.loads(r["value"]) if r else None
