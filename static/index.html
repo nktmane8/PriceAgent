@@ -101,13 +101,30 @@ $("loc").addEventListener("click", () => {
   if (!navigator.geolocation) { status.textContent = "This browser cannot share location. Type your country and city."; return; }
   status.className = ""; status.textContent = "Asking your device for your location…";
   navigator.geolocation.getCurrentPosition(async pos => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
     try {
-      const res = await fetch("/api/locate?lat=" + pos.coords.latitude.toFixed(2) + "&lon=" + pos.coords.longitude.toFixed(2));
+      const qs = "lat=" + pos.coords.latitude.toFixed(2) + "&lon=" + pos.coords.longitude.toFixed(2);
+      const res = await fetch("/api/locate?" + qs, {
+        signal: controller.signal,
+        headers: {"Accept": "application/json"}
+      });
       const d = await res.json().catch(() => ({}));
+      if (res.status === 429) throw new Error("Location lookup limit reached. You can type your country and city instead.");
+      if (res.status === 503) throw new Error("Location service is temporarily unavailable. You can type your country and city instead.");
       if (!res.ok) throw new Error(typeof d.detail === "string" ? d.detail : "Location lookup failed.");
+      if (!d.country) throw new Error("No country was found for this location. Please type it instead.");
       country.value = d.country; city.value = d.city || "";
+      status.className = "";
       status.textContent = "Location set to " + [d.city, d.country].filter(Boolean).join(", ") + ". Edit it if it looks wrong.";
-    } catch (err) { status.className = "error"; status.textContent = err.message; }
+    } catch (err) {
+      status.className = "error";
+      status.textContent = err.name === "AbortError"
+        ? "Location lookup took too long. Please type your country and city instead."
+        : (err.message || "Could not detect your location. Please type your country and city instead.");
+    } finally {
+      clearTimeout(timer);
+    }
   }, err => {
     status.className = "error";
     status.textContent = (err.code === 1 ? "Location permission was denied." : "Could not detect your location.") + " Type your country and city instead.";
