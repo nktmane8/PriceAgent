@@ -86,7 +86,7 @@ def partner(key: str | None = Depends(api_key_header), bearer: str | None = Depe
     """Who is calling /api/v1? OAuth user (preferred) or a partner API key. Returns (principal, limit)."""
     if bearer:
         row = oauth.verify_access_token(bearer)
-        if row and row["resource"] in (None, "", config.PUBLIC_URL):
+        if row and row["resource"] == config.PUBLIC_URL:
             return "user:" + str(row["user_id"]), config.USER_RATE_LIMIT
     if key and any(hmac.compare_digest(key, k) for k in config.API_KEYS):
         return "key:" + hashlib.sha256(key.encode()).hexdigest()[:12], config.KEY_RATE_LIMIT
