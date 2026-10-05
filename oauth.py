@@ -23,7 +23,7 @@ from constants import (LOGIN_ACCOUNT_LIMIT, LOGIN_IP_LIMIT, LOGIN_WINDOW, PASSWO
 from util import client_ip
 
 router = APIRouter()
-LOOPBACK = {"127.0.0.1", "localhost", "[::1]", "priceagent.onrender.com"}
+LOOPBACK = {"127.0.0.1", "localhost", "[::1]"}
 NO_STORE = {"Cache-Control": "no-store", "Pragma": "no-cache"}
 
 
@@ -65,7 +65,7 @@ def redirect_ok(registered, given):
     if given in registered:
         return True
     g = urlsplit(given)
-    if g.scheme == "http" and g.hostname in {"127.0.0.1", "localhost", "::1","priceagent.onrender.com"}:
+    if g.scheme == "http" and g.hostname in {"127.0.0.1", "localhost", "::1"}:
         return any((r := urlsplit(x)).scheme == "http" and r.hostname == g.hostname and r.path == g.path
                    for x in registered)
     return False
@@ -181,8 +181,8 @@ def authorize(request: Request):
     if q.get("code_challenge_method") != "S256" or not re.fullmatch(r"[A-Za-z0-9_-]{43,128}", q.get("code_challenge", "")):
         return back(ru, error="invalid_request", error_description="PKCE S256 required", state=state, iss=iss)
     res = q.get("resource")
-    if res and res not in resources():
-        return back(ru, error="invalid_target", state=state, iss=iss)
+    if res not in resources():
+        return back(ru, error="invalid_target", error_description="resource is required and must identify the target API.", state=state, iss=iss)
     rid = secrets.token_urlsafe(24)
     with db.conn() as c:
         c.execute("INSERT INTO oauth_requests VALUES(?,?,?,?,?,?,?,?)",
