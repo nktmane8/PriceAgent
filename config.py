@@ -76,6 +76,7 @@ DB_PATH = os.environ.get("DATABASE_PATH", "data/price-agent.db")
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "priceagent.onrender.com").rstrip("/")
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+JWT_SECRET = os.environ.get("JWT_SECRET", "")
 API_KEYS = [k.strip() for k in os.environ.get("API_KEYS", "").split(",") if k.strip()]   # secret
 ADMIN_KEY = os.environ.get("ADMIN_KEY", "")                                             # secret
 NOMINATIM_CONTACT = os.environ.get("NOMINATIM_CONTACT", "set-NOMINATIM_CONTACT")
