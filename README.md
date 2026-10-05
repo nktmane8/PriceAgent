@@ -2,7 +2,7 @@
 
 ![CI](https://github.com/nktmane8/PriceAgent/actions/workflows/ci.yml/badge.svg)
 
-Type a product and your region. The agent supports both OpenAI web search and Gemini Google Search grounding, with configurable provider routing to find the stores that serve you (online marketplaces, brand stores, chains, local shops) and ranks them by effective price. Works as a web page, a REST API and an OAuth-protected MCP server for other AI apps.
+Type a product and your region. The agent supports Gemini Google Search, Groq browser search, OpenAI web search, and automatic fallback through Hugging Face and Ollama, with configurable provider routing to find the stores that serve you (online marketplaces, brand stores, chains, local shops) and ranks them by effective price. Works as a web page, a REST API and an OAuth-protected MCP server for other AI apps.
 
 ## Features
 - **Region-aware discovery**, not a fixed store list; country auto-filled from browser locale, **Use my location** (GPS, rounded to ~1 km) or typed manually; local currency.
@@ -21,10 +21,13 @@ Settings come from `env/.env.<APP_ENV>` (default `development`); secrets go in a
 ```bash
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-export GEMINI_API_KEY="..."                         # PowerShell: $env:GEMINI_API_KEY="..."
-# Development defaults to Gemini. To use both with fallback:
-# export AI_PROVIDER="auto"
+export GROQ_API_KEY="..."                            # PowerShell: $env:GROQ_API_KEY="..."
+# Optional fallbacks:
+# export GEMINI_API_KEY="..."
+# export HF_TOKEN="..."
 # export OPENAI_API_KEY="sk-..."
+# Install Ollama locally and run: ollama pull gpt-oss:20b
+# Development defaults to automatic fallback: Groq -> Gemini -> Hugging Face -> Ollama -> OpenAI
 uvicorn main:app --reload
 ```
 Open http://127.0.0.1:8000, enter a product, confirm the country, click **Compare** (30-60 s). The database is created at `data/price-agent.db`.
@@ -48,9 +51,17 @@ After deploying, check the live app and the MCP endpoint: `python tools/smoke.py
 |---|---|---|
 | `APP_ENV` | development | development, test, staging or production; loads `env/.env.<APP_ENV>` |
 | `LOG_LEVEL` | INFO | DEBUG, INFO, WARNING |
-| `AI_PROVIDER` | openai | `gemini`, `openai`, `auto`, or comma-separated priority such as `gemini,openai` |
+| `AI_PROVIDER` | auto | `auto` or comma-separated priority such as `groq,gemini,huggingface,ollama,openai` |
 | `GEMINI_API_KEY` | optional | Gemini secret; required when Gemini is selected |
-| `GEMINI_MODEL` | gemini-3.8-flash | Gemini model |
+| `GEMINI_MODEL` | gemini-flash-latest | Gemini model |
+| `GROQ_API_KEY` | optional | Groq secret; required when Groq is selected |
+| `GROQ_MODEL` | openai/gpt-oss-120b | Groq model with browser search |
+| `HF_TOKEN` | optional | Hugging Face token; required when HF is selected |
+| `HF_MODEL` | openai/gpt-oss-120b:fastest | HF Inference Providers model |
+| `HF_BASE_URL` | https://router.huggingface.co/v1 | HF OpenAI-compatible endpoint |
+| `OLLAMA_API_KEY` | optional | Required only for remote Ollama; local Ollama ignores it |
+| `OLLAMA_BASE_URL` | http://localhost:11434/v1 | Local or remote Ollama OpenAI-compatible endpoint |
+| `OLLAMA_MODEL` | gpt-oss:20b | Ollama model |
 | `OPENAI_API_KEY` | optional | OpenAI secret; required when OpenAI is selected |
 | `OPENAI_MODEL` | gpt-6-luna | OpenAI model |
 | `PUBLIC_URL` | `http://127.0.0.1:8000` | Public https URL; OAuth issuer; must be exact |
