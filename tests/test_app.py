@@ -194,7 +194,7 @@ def test_admin_metrics_fields(client):
     poll(client, client.post("/api/jobs", json=BODY).json()["job_id"])
     client.post("/api/jobs", json=BODY)
     s = client.get("/api/admin/stats", headers={"X-Admin-Key": "adm"}).json()
-    assert s["cache_hit_rate"] == 0.5 and s["by_principal_type"]["ip"]["jobs"] == 2
+    assert s["cache_hit_rate"] == 0.5 and s["by_principal_type"]["user"]["jobs"] == 2
     assert "avg_agent_seconds" in s and "top_errors" in s and s["price_history_rows"] == 2
 
 
