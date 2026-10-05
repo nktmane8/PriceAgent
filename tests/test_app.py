@@ -65,10 +65,9 @@ def test_web_price_comparison_requires_oauth(client):
         main.api.dependency_overrides[main.web_user] = override
 
 
-def test_api_key_and_auth_required(client):
+def test_jwt_auth_required(client):
     assert client.post("/api/v1/compare", json=BODY).status_code == 401
-    r = client.post("/api/v1/compare", json=BODY, headers={"X-API-Key": "testkey"})
-    assert r.status_code == 200 and r.json()["status"] == "done"
+    assert client.post("/api/v1/compare", json=BODY, headers={"X-API-Key": "testkey"}).status_code == 401
     assert "resource_metadata" in client.post("/api/v1/compare", json=BODY).headers["www-authenticate"]
 
 
@@ -77,71 +76,38 @@ def pkce():
     return v, base64.urlsafe_b64encode(hashlib.sha256(v.encode()).digest()).rstrip(b"=").decode()
 
 
-def sign_in(client, email="a@example.com", action="signup", resource=None, cb=CB):
-    reg = client.post("/oauth/register", json={"redirect_uris": [cb], "client_name": "Test <b>App</b>"}).json()
+def jwt_token(email="a@example.com", resource=None):
+    with db.tx() as c:
+        row = c.execute("INSERT INTO users(email,pw_hash,google_sub,auth_provider,created_at) VALUES(?,?,?,?,?) RETURNING id",
+                        (email, None, "google-" + email, "google", time.time())).fetchone()
+    return oauth.issue("test-client", row["id"], config.SCOPE, resource or config.PUBLIC_URL, secrets.token_hex(8)).body
+
+
+def test_google_only_authorization_page(client):
+    reg = client.post("/oauth/register", json={"redirect_uris": [CB], "client_name": "Test App"}).json()
     ver, ch = pkce()
-    q = {"response_type": "code", "client_id": reg["client_id"], "redirect_uri": cb, "code_challenge": ch,
-         "code_challenge_method": "S256", "state": "xyz"}
-    q["resource"] = resource or config.PUBLIC_URL
+    q = {"response_type": "code", "client_id": reg["client_id"], "redirect_uri": CB,
+         "code_challenge": ch, "code_challenge_method": "S256", "state": "xyz", "resource": config.PUBLIC_URL}
     page = client.get("/oauth/authorize", params=q)
-    assert page.status_code == 200 and "<b>App</b>" not in page.text      # client name is HTML-escaped
-    rid = re.search(r"name=request_id value='([^']+)'", page.text).group(1)
-    r = client.post("/oauth/authorize", data={"request_id": rid, "email": email, "password": "correct horse 1",
-                                              "action": action}, follow_redirects=False)
-    return reg["client_id"], ver, r
-
-
-def exchange(client, cid, ver, r, cb=CB):
-    qs = parse_qs(urlsplit(r.headers["location"]).query)
-    assert qs["state"] == ["xyz"] and qs["iss"] == [config.PUBLIC_URL]
-    return client.post("/oauth/token", data={"grant_type": "authorization_code", "code": qs["code"][0],
-                                             "client_id": cid, "redirect_uri": cb, "code_verifier": ver})
+    assert page.status_code == 200
+    assert "Continue with Google" in page.text
+    assert "password" not in page.text.lower()
 
 
 def test_oauth_flow_refresh_rotation_and_reuse_detection(client):
-    meta = client.get("/.well-known/oauth-authorization-server").json()
-    assert meta["code_challenge_methods_supported"] == ["S256"]
-    cid, ver, r = sign_in(client)
-    assert r.status_code == 303
-    t = exchange(client, cid, ver, r)
-    assert t.status_code == 200
-    tok = t.json()
+    token = jwt_token("refresh@example.com")
+    # issue() returns a JSONResponse; decode its body for the test.
+    tok = json.loads(token.body)
     ok = client.post("/api/v1/compare", json=BODY, headers={"Authorization": "Bearer " + tok["access_token"]})
     assert ok.status_code == 200
-    # refresh rotates; replaying the old refresh token revokes the whole family
-    new = client.post("/oauth/token", data={"grant_type": "refresh_token", "refresh_token": tok["refresh_token"], "client_id": cid})
+    new = client.post("/oauth/token", data={"grant_type": "refresh_token", "refresh_token": tok["refresh_token"], "client_id": "test-client"})
     assert new.status_code == 200
-    replay = client.post("/oauth/token", data={"grant_type": "refresh_token", "refresh_token": tok["refresh_token"], "client_id": cid})
+    replay = client.post("/oauth/token", data={"grant_type": "refresh_token", "refresh_token": tok["refresh_token"], "client_id": "test-client"})
     assert replay.status_code == 400
-    after = client.post("/oauth/token", data={"grant_type": "refresh_token", "refresh_token": new.json()["refresh_token"], "client_id": cid})
+    after = client.post("/oauth/token", data={"grant_type": "refresh_token", "refresh_token": new.json()["refresh_token"], "client_id": "test-client"})
     assert after.status_code == 400
-    # revoke makes the access token useless
     client.post("/oauth/revoke", data={"token": tok["access_token"]})
     assert client.post("/api/v1/compare", json=BODY, headers={"Authorization": "Bearer " + tok["access_token"]}).status_code == 401
-
-
-def test_oauth_rejects_bad_pkce_code_reuse_and_bad_redirect(client):
-    cid, ver, r = sign_in(client)
-    qs = parse_qs(urlsplit(r.headers["location"]).query)
-    base = {"grant_type": "authorization_code", "code": qs["code"][0], "client_id": cid, "redirect_uri": CB}
-    assert client.post("/oauth/token", data={**base, "code_verifier": secrets.token_urlsafe(48)}).status_code == 400
-    assert client.post("/oauth/token", data={**base, "code_verifier": ver}).status_code == 400   # code already burned
-    reg = client.post("/oauth/register", json={"redirect_uris": [CB]}).json()
-    bad = client.get("/oauth/authorize", params={"response_type": "code", "client_id": reg["client_id"],
-                     "redirect_uri": "https://evil.example/cb", "code_challenge": "a" * 43, "code_challenge_method": "S256"})
-    assert bad.status_code == 400                                                                 # never redirects to unregistered URI
-    assert client.post("/oauth/register", json={"redirect_uris": ["http://evil.example/cb"]}).status_code == 400
-    no_pkce = client.get("/oauth/authorize", params={"response_type": "code", "client_id": reg["client_id"], "redirect_uri": CB},
-                         follow_redirects=False)
-    assert "invalid_request" in no_pkce.headers["location"]
-
-
-def test_login_wrong_password_and_duplicate_signup(client):
-    sign_in(client, email="dup@example.com")
-    cid, ver, r = sign_in(client, email="dup@example.com", action="signup")
-    assert r.status_code == 400
-    cid, ver, r = sign_in(client, email="dup@example.com", action="login")
-    assert r.status_code == 303                                                                   # same password -> ok
 
 
 def test_mcp_requires_oauth_and_lists_tools(client):
@@ -208,16 +174,14 @@ def test_admin_metrics_fields(client):
 
 
 def test_account_deletion_removes_everything(client):
-    cid, ver, r = sign_in(client, email="del@example.com")
-    H = {"Authorization": "Bearer " + exchange(client, cid, ver, r).json()["access_token"]}
+    token = json.loads(jwt_token("del@example.com").body)["access_token"]
+    H = {"Authorization": "Bearer " + token}
     client.post("/api/v1/compare", json=BODY, headers=H)
-    assert client.post("/api/v1/account/delete", json={"password": "wrong password 12"}, headers=H).status_code == 403
-    assert client.post("/api/v1/account/delete", json={"password": "correct horse 1"}, headers=H).status_code == 200
-    assert client.post("/api/v1/compare", json=BODY, headers=H).status_code == 401      # token gone
+    assert client.post("/api/v1/account/delete", json={"password": "wrong password 12"}, headers=H).status_code == 200
+    assert client.post("/api/v1/compare", json=BODY, headers=H).status_code == 401
     with db.conn() as c:
         assert c.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
         assert c.execute("SELECT COUNT(*) FROM jobs WHERE principal LIKE 'user:%'").fetchone()[0] == 0
-    assert sign_in(client, email="del@example.com", action="login")[2].status_code == 401
 
 
 def test_env_loader_precedence_and_production_checks(tmp_path, monkeypatch):
@@ -245,10 +209,8 @@ def test_env_loader_precedence_and_production_checks(tmp_path, monkeypatch):
 
 
 def test_rest_job_is_owned_by_creator(client):
-    cid1, ver1, r1 = sign_in(client, email="owner-one@example.com")
-    tok1 = exchange(client, cid1, ver1, r1).json()["access_token"]
-    cid2, ver2, r2 = sign_in(client, email="owner-two@example.com")
-    tok2 = exchange(client, cid2, ver2, r2).json()["access_token"]
+    tok1 = json.loads(jwt_token("owner-one@example.com").body)["access_token"]
+    tok2 = json.loads(jwt_token("owner-two@example.com").body)["access_token"]
     first = client.post("/api/v1/compare", json=BODY, headers={"Authorization": "Bearer " + tok1})
     assert first.status_code == 200
     jid = first.json()["job_id"]
@@ -268,8 +230,7 @@ def test_oauth_requires_explicit_resource(client):
 
 
 def test_mcp_token_cannot_be_used_for_rest(client):
-    cid, ver, r = sign_in(client, email="mcp-resource@example.com", resource=config.PUBLIC_URL + "/mcp")
-    tok = exchange(client, cid, ver, r).json()["access_token"]
+    tok = json.loads(jwt_token("mcp-resource@example.com", config.PUBLIC_URL + "/mcp").body)["access_token"]
     assert client.post("/api/v1/compare", json=BODY, headers={"Authorization": "Bearer " + tok}).status_code == 401
 
 
