@@ -105,8 +105,6 @@ def problems() -> list[str]:
     if "ollama" in AI_PROVIDER and not os.environ.get("OLLAMA_API_KEY") and not OLLAMA_BASE_URL.startswith(("http://localhost", "http://127.0.0.1")):
         p.append("OLLAMA_API_KEY is required for a remote Ollama endpoint")
     if PRODUCTION_LIKE:
-        if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-            p.append("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required for Google sign-in")
         if not PUBLIC_URL.startswith("https://"):
             p.append("PUBLIC_URL must be an https URL")
         if not os.path.isabs(DB_PATH):
