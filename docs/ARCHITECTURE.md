@@ -2,11 +2,11 @@
 
 ```
 Browser ──POST /api/jobs, poll──┐
-AI app ──OAuth──> /mcp ─────────┤        ┌─ thread pool (WORKERS) ─> agent.py ─> Anthropic API + web_search
+AI app ──OAuth──> /mcp ─────────┤        ┌─ thread pool (WORKERS) ─> agent.py ─> OpenAI Responses API + web_search
 Partner ─OAuth/API key─> /api/v1┴─> jobs.py ─┤
                                              └─> SQLite (cache, jobs, rate limits, users, OAuth) <── purger thread
 ```
-One process, one instance: `main.py` (wiring) -> `jobs.py` (threads) -> `agent.py` (Claude) -> `db.py` (SQLite). `oauth.py` is the authorization server; `mcp_app.py` is the MCP server; `util.py` has input validation.
+One process, one instance: `main.py` (wiring) -> `jobs.py` (threads) -> `agent.py` (OpenAI) -> `db.py` (SQLite). `oauth.py` is the authorization server; `mcp_app.py` is the MCP server; `util.py` has input validation.
 
 ## Data model (SQLite, WAL mode)
 | Table | Purpose | Key columns |

@@ -216,9 +216,9 @@ def test_env_loader_precedence_and_production_checks(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "PUBLIC_URL", "http://x")
     monkeypatch.setattr(config, "DB_PATH", "data/x.db")
     monkeypatch.setattr(config, "API_KEYS", ["short"])
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     found = " | ".join(config.problems())
-    for word in ("ANTHROPIC_API_KEY", "https", "absolute path", "NOMINATIM_CONTACT", "20+"):
+    for word in ("OPENAI_API_KEY", "https", "absolute path", "NOMINATIM_CONTACT", "20+"):
         assert word in found
     import pytest
     with pytest.raises(RuntimeError):

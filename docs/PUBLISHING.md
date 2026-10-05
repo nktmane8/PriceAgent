@@ -10,8 +10,8 @@ The web page is for people. Other AI apps need a machine interface. This project
 
 ## Step 0 - Prepare (do this before any portal)
 1. Deploy the app on Render (see README) over HTTPS.
-2. Set env vars: `ANTHROPIC_API_KEY`, `PUBLIC_URL` (exact https URL; it is the OAuth issuer), `NOMINATIM_CONTACT`, optional `API_KEYS` for partners.
-3. Set an Anthropic monthly spend limit. A public listing can send traffic you did not plan for.
+2. Set env vars: `OPENAI_API_KEY`, `PUBLIC_URL` (exact https URL; it is the OAuth issuer), `NOMINATIM_CONTACT`, optional `API_KEYS` for partners.
+3. Set an OpenAI monthly spend limit (API platform > Limits). A public listing can send traffic you did not plan for.
 4. Write a privacy policy and terms (location is personal data) and a support email. Every directory asks for them.
 5. Latency is handled: sync calls return a `job_id` after ~50 s and clients poll.
 

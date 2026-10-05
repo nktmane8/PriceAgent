@@ -26,6 +26,7 @@ uvicorn main:app --reload
 ```
 Open http://127.0.0.1:8000, enter a product, confirm the country, click **Compare** (30-60 s). The database is created at `data/price-agent.db`.
 Tests (no API key needed): `pip install -r requirements-dev.txt && python -m pytest -q tests`.
+After deploying, check the live app and the MCP endpoint: `python tools/smoke.py https://your-app.onrender.com [--key API_KEY]`.
 
 ## Deploy on Render
 1. Push to GitHub. In Render: **New > Blueprint**, choose the repo (`render.yaml`).

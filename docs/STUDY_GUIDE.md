@@ -43,7 +43,7 @@ Python threads share a GIL, which is fine here: the work is waiting on network I
 7. Add a second kind of limit: per-day cap per IP.
 8. Write an eval case from a real product and run `evals/run_evals.py`.
 9. Simulate a crash: kill the server mid-job, restart, confirm the job is `error`.
-10. Replace the Anthropic call with a fake that returns instantly; run the whole UI offline.
+10. Replace the OpenAI call with a fake that returns instantly; run the whole UI offline.
 
 ## Self-check questions (answers)
 1. **Why 202 + polling?** The agent takes 30-60 s; proxies and clients time out. Work runs in threads; the page polls.
@@ -63,7 +63,7 @@ Python threads share a GIL, which is fine here: the work is waiting on network I
 15. **What breaks first at 10k requests per second?** Not CPU: spend and latency of the LLM, then SQLite writes and the single process. See the next section.
 
 ## Interview material
-**60-second pitch.** "I built a region-aware price comparison agent. A request becomes a background job: cache, then in-flight de-duplication, then rate limit, then a worker thread calls Claude with web search. Model output is untrusted, so an anti-corruption layer validates it before the UI or MCP clients see it. It exposes a web page, REST and an OAuth 2.1 protected MCP server, persists state in SQLite, and tracks cost per job. Known limit: single instance; next step is Postgres and Redis."
+**60-second pitch.** "I built a region-aware price comparison agent. A request becomes a background job: cache, then in-flight de-duplication, then rate limit, then a worker thread calls OpenAI with web search. Model output is untrusted, so an anti-corruption layer validates it before the UI or MCP clients see it. It exposes a web page, REST and an OAuth 2.1 protected MCP server, persists state in SQLite, and tracks cost per job. Known limit: single instance; next step is Postgres and Redis."
 
 **Scaling to 10k+ requests per second (talking points).** Separate reads from work: serve cache hits and polls from Redis/CDN; make API pods stateless; move the queue to a broker (Redis streams, SQS or Kafka) with autoscaling workers and bounded queues (backpressure); Postgres for jobs/users, Redis for rate limits and cache; idempotency keys and circuit breaker around the LLM; pre-compute popular products; per-tenant budgets; observability on queue depth and cost per request. The LLM bill, not the web tier, is the real constraint.
 

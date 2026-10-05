@@ -2,7 +2,7 @@
 Read this first, then `CODE_REFERENCE.md` (auto-generated list of every function with its docstring and line number), then the code. For design rationale see `DESIGN.md`; for learning exercises see `STUDY_GUIDE.md`.
 
 ## 1. What the program does
-A shopper enters a product and a region. The app finds stores that serve that region, compares prices, and (on request) shows sourced reviews and similar products. The slow work (30-60 s of web search by Claude) runs in background threads; the page starts a job and polls it. AI apps use the same engine through REST and an OAuth-protected MCP server.
+A shopper enters a product and a region. The app finds stores that serve that region, compares prices, and (on request) shows sourced reviews and similar products. The slow work (30-60 s of web search by the OpenAI model) runs in background threads; the page starts a job and polls it. AI apps use the same engine through REST and an OAuth-protected MCP server.
 
 ## 2. Architecture we follow
 **A layered modular monolith**: one deployable, one process, clear layers, dependencies pointing downward.
@@ -12,18 +12,18 @@ A shopper enters a product and a region. The app finds stores that serve that re
 | Presentation | `static/index.html` | UI, polling, safe rendering (`textContent`) |
 | Interface | `main.py` (REST), `mcp_app.py` (MCP), `oauth.py` (OAuth routes) | HTTP/MCP contracts, auth, validation, status codes |
 | Application | `jobs.py` | Orchestration: cache, dedupe, rate limit, queue, worker, wait |
-| Domain + anti-corruption | `agent.py`, `util.py`, `constants.py` | Prompts, calling Claude, `clean()` / `clean_insights()` turn untrusted output into trusted data |
-| Infrastructure | `db.py`, `config.py`, Anthropic API, OpenStreetMap | Storage, settings, external services |
+| Domain + anti-corruption | `agent.py`, `util.py`, `constants.py` | Prompts, calling OpenAI, `clean()` / `clean_insights()` turn untrusted output into trusted data |
+| Infrastructure | `db.py`, `config.py`, OpenAI API, OpenStreetMap | Storage, settings, external services |
 
 Patterns used (named so you can discuss them): **asynchronous request-reply (job pattern with polling)**, **producer-consumer** (thread pool), **cache-aside with in-flight de-duplication**, **anti-corruption layer** (DDD), **repository-style data access** (`db.py`), **authorization server + resource servers** (OAuth 2.1 code + PKCE), **gateway/adapter** to external services, **12-factor configuration** with per-environment files, **fail-fast start-up validation**.
-Not used: microservices, event sourcing, CQRS, message broker, ORM. Not strictly hexagonal either: there are no formal ports/interfaces; add one if you introduce a second AI provider (ROADMAP #11).
+Not used: microservices, event sourcing, CQRS, message broker, ORM. Not strictly hexagonal either: there are no formal ports/interfaces; add one if you introduce a second AI provider (ROADMAP #10 or #11).
 Dependency rule: `db.py` and `config.py` import nothing from upper layers; `main.py` imports everything.
 
 ## 3. Folder map
 ```
 main.py        app wiring + REST endpoints          oauth.py     OAuth 2.1 server
 mcp_app.py     MCP tools + token verifier           jobs.py      thread pool, job service, purge thread
-agent.py       prompts, Claude calls, cleaning      db.py        SQLite schema + helpers
+agent.py       prompts, OpenAI calls, cleaning      db.py        SQLite schema + helpers
 config.py      env-driven settings + validation     constants.py fixed global values
 util.py        validation, client IP                mcp_server.py optional local stdio wrapper
 static/        web page                             env/         per-environment defaults (no secrets)
@@ -36,7 +36,7 @@ tools/         gen_code_map.py                      docs/        all documentati
 |---|---|---|
 | Fixed for all environments | `constants.py` | job statuses, OAuth TTLs, validation limits, output caps |
 | Changes per environment | `config.py`, defaults in `env/.env.<APP_ENV>` | `PUBLIC_URL`, `WORKERS`, `MAX_SEARCHES`, rate limits |
-| Secret | Real environment variable only | `ANTHROPIC_API_KEY`, `API_KEYS`, `ADMIN_KEY` |
+| Secret | Real environment variable only | `OPENAI_API_KEY`, `API_KEYS`, `ADMIN_KEY` |
 
 Precedence: real environment variable > `.env` (git-ignored) > `env/.env.<APP_ENV>`. `APP_ENV` is `development` (default), `test`, `staging` or `production`. In staging/production, `config.assert_ready()` stops the app at start-up if `PUBLIC_URL` is not https, the database path is not absolute, the contact is unset, or keys are weak. Full table: `CONFIGURATION.md`.
 Add a setting: (1) add it to `config.py` with a default, (2) add to each `env/` file where it differs, (3) document it in `CONFIGURATION.md` and `.env.example`, (4) use `config.X` (never `os.environ` elsewhere).
@@ -51,7 +51,7 @@ Add a setting: (1) add it to `config.py` with a default, (2) add to each `env/` 
 2. `db.job_active(key)`: same query already running -> return that job id.
 3. `db.rate_check(principal, limit)`: over limit -> `RateLimited` -> HTTP 429.
 4. `db.job_create(queued)` -> `_pool.submit(_work)` -> returns 202 + job id.
-Worker thread: `_work` -> `agent.run_agent` -> `_converse` (Claude + web search, loops on `pause_turn`, sums usage) -> `_parse` -> `extract_json` -> `clean` -> `db.cache_set` -> `db.record_history` -> `db.job_update(done)`.
+Worker thread: `_work` -> `agent.run_agent` -> `_converse` (OpenAI Responses + web search, sums usage) -> `_parse` -> `extract_json` -> `clean` -> `db.cache_set` -> `db.record_history` -> `db.job_update(done)`.
 Page: `GET /api/jobs/{id}` every 3 s -> `main.read_job` -> `db.job_get` -> `respond`. When done it renders the best deal and store cards, then calls `GET /api/history` for the "lowest in 90 days" line.
 
 **B. Reviews and similar products**: same as A with `kind=insights` (`agent.run_insights` -> `clean_insights`, reviews without links dropped). Own cache key and hourly allowance (`principal + ":insights"`). No history is recorded.
@@ -67,7 +67,7 @@ Page: `GET /api/jobs/{id}` every 3 s -> `main.read_job` -> `db.job_get` -> `resp
 ## 6. Modules in brief
 - **main.py**: defines request models, the `partner` auth dependency, endpoints, security-headers middleware; builds the final app (`mcp` app + mounted FastAPI app).
 - **jobs.py**: the only place that decides *whether to run the agent*. `_submit_lock` makes check-then-create atomic. `wait` polls the DB every 0.5 s. `view` is the whitelist of fields clients may see.
-- **agent.py**: `SYSTEM_PROMPT` and `INSIGHTS_PROMPT` are the product's behaviour. `_converse` is the shared Claude loop. `clean*` enforce types, sizes, http(s) links, enums.
+- **agent.py**: `SYSTEM_PROMPT` and `INSIGHTS_PROMPT` are the product's behaviour. `_converse` is the shared OpenAI call. `clean*` enforce types, sizes, http(s) links, enums.
 - **db.py**: tables, `tx()` write transactions (`BEGIN IMMEDIATE`), sliding-window `rate_check`, job/cache/history helpers, `stats`, `purge`.
 - **oauth.py**: all OAuth routes and helpers; secrets hashed; exact redirect matching; brute-force limits; audience-bound tokens.
 - **mcp_app.py**: MCP server with Host/Origin validation and three tools.
