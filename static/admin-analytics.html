@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PriceAgent Analytics</title>
+<style>
+body{font-family:system-ui,-apple-system,sans-serif;margin:0;background:#f7f7f5;color:#111}main{max-width:1100px;margin:40px auto;padding:0 20px}h1{font-size:32px}.bar{display:flex;gap:8px;flex-wrap:wrap}.bar input{padding:12px;border:1px solid #ccc;border-radius:8px;min-width:280px}.bar button{padding:12px 18px;border:0;border-radius:8px;background:#111;color:#fff}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:24px 0}.card{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:18px}.num{font-size:28px;font-weight:700;margin-top:8px}table{width:100%;border-collapse:collapse;background:#fff}.card,table{box-shadow:0 2px 10px #00000008}td,th{text-align:left;padding:10px;border-bottom:1px solid #eee}.muted{color:#666}
+</style>
+</head>
+<body><main>
+<h1>PriceAgent Analytics</h1>
+<p class="muted">Operational product metrics from the PriceAgent database. No personal visitor identity is shown.</p>
+<div class="bar"><input id="key" type="password" placeholder="X-Admin-Key"><button id="load">Load metrics</button></div>
+<div id="msg" class="muted"></div>
+<section id="cards" class="grid"></section>
+<section class="card"><h2>Jobs by status</h2><table><thead><tr><th>Status</th><th>Jobs</th></tr></thead><tbody id="jobs"></tbody></table></section>
+<section class="card" style="margin-top:16px"><h2>Top errors</h2><table><thead><tr><th>Error</th><th>Count</th></tr></thead><tbody id="errors"></tbody></table></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+function esc(v){return String(v??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+$("load").onclick=async()=>{
+ const key=$("key").value.trim(); if(!key){$("msg").textContent="Enter the admin key.";return;}
+ $("msg").textContent="Loading…";
+ try{
+  const r=await fetch("/api/admin/stats",{headers:{"X-Admin-Key":key}});
+  const d=await r.json(); if(!r.ok) throw new Error(d.detail||"Request failed");
+  const cards=[["Users",d.users],["Web searches",d.web_searches],["Price history rows",d.price_history_rows],["Cache hit rate",d.cache_hit_rate==null?"—":(d.cache_hit_rate*100).toFixed(1)+"%"],["Avg agent seconds",d.avg_agent_seconds],["Estimated search cost","$"+Number(d.search_cost_usd_estimate||0).toFixed(2)]];
+  $("cards").innerHTML=cards.map(x=>'<div class="card"><div class="muted">'+esc(x[0])+'</div><div class="num">'+esc(x[1])+'</div></div>').join("");
+  $("jobs").innerHTML=Object.entries(d.jobs||{}).map(([k,v])=>"<tr><td>"+esc(k)+"</td><td>"+esc(v)+"</td></tr>").join("");
+  $("errors").innerHTML=(d.top_errors||[]).map(x=>"<tr><td>"+esc(x.error||"unknown")+"</td><td>"+esc(x.n)+"</td></tr>").join("")||'<tr><td colspan="2">No errors recorded</td></tr>';
+  $("msg").textContent="Updated "+new Date().toLocaleString();
+ }catch(e){$("msg").textContent=e.message;}
+};
+</script></body></html>
