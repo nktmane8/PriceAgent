@@ -43,8 +43,14 @@ def calls():
 @pytest.fixture(scope="session")
 def _session_client():
     # The MCP session manager can start only once per process, so share one client for the whole run.
-    with TestClient(main.app, base_url="http://127.0.0.1:8000") as c:
-        yield c
+    # Legacy /api/jobs endpoints are production-OAuth protected. Override only
+    # that dependency in tests so the existing lifecycle tests stay focused on jobs.
+    main.api.dependency_overrides[main.web_user] = lambda: ("user:test", config.USER_RATE_LIMIT)
+    try:
+        with TestClient(main.app, base_url="http://127.0.0.1:8000") as c:
+            yield c
+    finally:
+        main.api.dependency_overrides.pop(main.web_user, None)
 
 
 @pytest.fixture
