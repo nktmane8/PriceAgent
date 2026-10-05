@@ -3,8 +3,8 @@ Schema: `GET /openapi.json`. Base URL = `PUBLIC_URL`.
 
 | Method + path | Auth | Purpose |
 |---|---|---|
-| `POST /api/jobs` | none, 5/h per IP | Start a comparison (web page). 200 if cached, else 202 |
-| `GET /api/jobs/{id}` | none (id is secret) | Poll a job |
+| `POST /api/jobs` | OAuth bearer | First-party web comparison. 200 if cached, else 202 |
+| `GET /api/jobs/{id}` | OAuth bearer | Poll caller-owned job |
 | `POST /api/v1/compare` | OAuth bearer or `X-API-Key` | Start and wait up to 50 s. 200 result or 202 + job_id |
 | `GET /api/v1/jobs/{id}` | same | Poll |
 | `POST /mcp` | OAuth bearer | MCP tools `compare_prices`, `get_comparison_result` |
