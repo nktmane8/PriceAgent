@@ -26,3 +26,13 @@
 | Price history (product, store, price; no user data) | `price_history` | 180 days |
 
 Publish a privacy policy (draft from this table, reviewed by a lawyer) before sharing. India's DPDP Act 2023 and GDPR may apply.
+
+
+## Current enforced invariants
+
+- REST access tokens are accepted only when their OAuth resource exactly matches the public REST origin.
+- MCP access tokens are accepted only when their OAuth resource exactly matches the `/mcp` resource.
+- Job reads are principal-scoped for both first-party OAuth users and partner API keys.
+- HTTP redirect URIs are HTTPS except native/CLI loopback addresses (`127.0.0.1`, `localhost`, `::1`).
+- PostgreSQL rate limiting uses a per-principal advisory transaction lock to avoid concurrent-instance races.
+- Worker-loss recovery converts stale `running` jobs to a controlled retryable failure state.
