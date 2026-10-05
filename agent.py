@@ -371,13 +371,45 @@ def _parse(text, cleaner):
         raise AgentError("The agent did not return valid results. Please try again.")
 
 
+def _enrich_local_stores(data, country, city):
+    """Optionally enrich physical stores with Google Places phone/rating/address."""
+    key = config.GOOGLE_PLACES_API_KEY
+    if not key or not city:
+        return data
+    for item in data.get("results", []):
+        if item.get("store_type") not in ("local", "chain"):
+            continue
+        site = item.get("site") or ""
+        if not site:
+            continue
+        try:
+            payload = {"textQuery": f"{site} {city} {country}", "pageSize": 1, "regionCode": "IN"}
+            headers = {"Content-Type": "application/json", "X-Goog-Api-Key": key,
+                       "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.rating,places.userRatingCount,places.googleMapsUri"}
+            r = requests.post("https://places.googleapis.com/v1/places:searchText", json=payload, headers=headers, timeout=12)
+            if r.status_code >= 400:
+                continue
+            place = ((r.json().get("places") or [None])[0]) or {}
+            item["phone"] = item.get("phone") or _s(place.get("nationalPhoneNumber"), 40)
+            item["address"] = item.get("address") or _s(place.get("formattedAddress"), 160)
+            item["store_rating"] = item.get("store_rating") or _num(place.get("rating"))
+            item["rating_count"] = item.get("rating_count") or (_num(place.get("userRatingCount")))
+            if place.get("googleMapsUri"):
+                item["maps_url"] = _s(place.get("googleMapsUri"), 600)
+        except Exception as exc:
+            logging.getLogger("price-agent").warning("Places lookup failed for %s: %s", site, exc)
+    return data
+
+
 def run_agent(product, country, city, sites):
     """Prices. Returns (clean_result, usage). Runs in a worker thread."""
     prompt = f"Product: {product}\nCountry: {country}\nCity/area: {city or 'not given'}"
     if sites:
         prompt += f"\nPreferred stores to include: {', '.join(sites)}"
     text, usage = _converse(SYSTEM_PROMPT, prompt, config.MAX_SEARCHES, 4000)
-    return _parse(text, clean), usage
+    data = _parse(text, clean)
+    data = _enrich_local_stores(data, country, city)
+    return data, usage
 
 
 def _youtube_reviews(product, max_results=6):
