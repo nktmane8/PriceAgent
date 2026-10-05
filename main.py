@@ -336,6 +336,12 @@ def history(request: Request, product: str = Query(..., min_length=3, max_length
     return db.history_summary(db.history_key(p["product"], p["country"], p["city"]))
 
 
+@api.get("/api/admin/analytics", include_in_schema=False)
+def admin_analytics(days: int = Query(30, ge=1, le=90), x_admin_key: str | None = Header(default=None)):
+    if not config.ADMIN_KEY or not x_admin_key or not hmac.compare_digest(x_admin_key, config.ADMIN_KEY):
+        raise HTTPException(401, "Admin key required.")
+    return analytics.dashboard(days)
+
 @api.get("/api/admin/stats", include_in_schema=False)
 def admin_stats(x_admin_key: str | None = Header(default=None)):
     """Admin metrics (needs the X-Admin-Key header)."""
