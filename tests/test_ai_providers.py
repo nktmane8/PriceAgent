@@ -6,6 +6,7 @@ def test_gemini_provider_is_supported(monkeypatch):
     calls = []
 
     monkeypatch.setattr(config, "AI_PROVIDER", "gemini")
+    monkeypatch.setattr(agent, "_provider_configured", lambda provider: provider == "gemini")
     monkeypatch.setattr(
         agent,
         "_converse_gemini",
@@ -26,6 +27,7 @@ def test_auto_provider_falls_back_from_gemini_to_openai(monkeypatch):
 
     monkeypatch.setattr(config, "AI_PROVIDER", "auto")
     monkeypatch.setattr(config, "AI_MAX_RETRIES", 0)
+    monkeypatch.setattr(agent, "_provider_configured", lambda provider: provider in {"gemini", "openai"})
 
     def gemini(*args):
         calls.append("gemini")
