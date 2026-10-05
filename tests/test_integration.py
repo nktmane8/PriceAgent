@@ -99,3 +99,70 @@ def test_ai_rate_limit_is_classified_without_network(monkeypatch):
 
     with pytest.raises(agent.AgentError, match="quota/billing limit"):
         agent._converse("system", "prompt", 1, 100)
+
+
+def test_ai_rate_limit_retries_once_then_succeeds(monkeypatch):
+    attempts = {"count": 0}
+
+    class FakeResponse:
+        headers = {"x-request-id": "req-retry"}
+
+        def json(self):
+            return {"error": {"type": "rate_limit_error", "code": "rate_limit_exceeded", "message": "slow down"}}
+
+    class FakeUsage:
+        input_tokens = 11
+        output_tokens = 7
+
+    class FakeOutput:
+        type = "message"
+
+    class FakeResult:
+        output = [FakeOutput()]
+        output_text = '{"ok": true}'
+        usage = FakeUsage()
+
+    class FakeResponses:
+        def create(self, **kwargs):
+            attempts["count"] += 1
+            if attempts["count"] == 1:
+                raise openai.RateLimitError("rate limited", response=FakeResponse(), body=None)
+            return FakeResult()
+
+    class FakeClient:
+        responses = FakeResponses()
+
+    monkeypatch.setattr(agent, "OpenAI", lambda **kwargs: FakeClient())
+    monkeypatch.setattr(agent.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(agent.config, "AI_MAX_RETRIES", 1)
+
+    text, usage = agent._converse("system", "prompt", 1, 100)
+
+    assert attempts["count"] == 2
+    assert text == '{"ok": true}'
+    assert usage == {"input_tokens": 11, "output_tokens": 7, "searches": 0}
+
+
+def test_compare_api_returns_202_while_job_is_running(client, monkeypatch):
+    monkeypatch.setattr(main.jobs, "wait", lambda jid, timeout: {
+        "id": jid,
+        "status": "running",
+    })
+
+    response = client.post(
+        "/api/v1/compare",
+        headers={"X-API-Key": "testkey"},
+        json={"product": "Phone X", "country": "India", "city": "Pune"},
+    )
+
+    assert response.status_code == 202
+    assert response.json()["status"] == "running"
+
+
+def test_job_poll_returns_404_for_unknown_job(client):
+    response = client.get(
+        "/api/v1/jobs/does-not-exist",
+        headers={"X-API-Key": "testkey"},
+    )
+
+    assert response.status_code == 404
