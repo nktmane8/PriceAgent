@@ -164,6 +164,25 @@ def test_price_history_is_recorded_once_per_fresh_run(client):
     assert client.get("/api/history", params={**q, "product": "x"}).status_code == 422
 
 
+def test_analytics_event_ledger_and_admin_dashboard(client):
+    event = client.post("/api/analytics/events", json={
+        "name": "buy_click", "client_id": "browser-1", "product": "Phone X 128GB",
+        "store": "example.com", "metadata": {"source": "similar_product"}
+    })
+    assert event.status_code == 200
+    second = client.post("/api/analytics/events", json={
+        "name": "buy_click", "client_id": "browser-1", "product": "Phone X 128GB",
+        "store": "example.com"
+    })
+    assert second.status_code == 200
+    dashboard = client.get("/api/admin/analytics?days=30", headers={"X-Admin-Key": "adm"})
+    assert dashboard.status_code == 200
+    body = dashboard.json()
+    assert body["totals"]["events"] == 2
+    assert body["totals"]["visitors"] == 1
+    assert body["events"][0]["name"] == "buy_click"
+
+
 def test_admin_metrics_fields(client):
     poll(client, client.post("/api/jobs", json=BODY).json()["job_id"])
     client.post("/api/jobs", json=BODY)
