@@ -66,6 +66,13 @@ def submit(params, principal, limit):
         if wait:
             raise RateLimited(wait)
         jid=db.job_create(key,params,principal)
+        # Render Free has no background workers. Execute inline while the
+        # job lifecycle and result remain durable in Postgres. Paid/distributed
+        # deployments continue to use RQ/Redis.
+        if config.FREE_RENDER:
+            _work(jid, key, params)
+            return jid
+
         q=_queue()
         if q:
             try:
