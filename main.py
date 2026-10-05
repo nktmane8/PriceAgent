@@ -26,7 +26,7 @@ import config
 import db
 import jobs
 import oauth
-from constants import FINISHED, KIND_INSIGHTS, KIND_PRICES, MAX_SITES
+from constants import KIND_INSIGHTS, KIND_PRICES, MAX_SITES
 from mcp_app import mcp
 from util import client_ip, validate
 
