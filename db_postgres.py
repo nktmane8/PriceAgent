@@ -59,8 +59,10 @@ def cache_set(key,value):
         c.execute("INSERT INTO cache(key,value,expires_at) VALUES(%s,%s,%s) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,expires_at=EXCLUDED.expires_at",(key,json.dumps(value),time.time()+config.CACHE_TTL));c.commit()
 
 def rate_check(principal,limit,window=HOUR):
+    """Atomically enforce a sliding-window limit across concurrent API instances."""
     now=time.time()
     with tx() as c:
+        c.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (principal,))
         r=c.execute("SELECT MIN(ts) AS m,COUNT(*) AS n FROM usage WHERE principal=%s AND ts>%s",(principal,now-window)).fetchone()
         if r["n"]>=limit:return max(1,int((r["m"]+window-now)//60)+1)
         c.execute("INSERT INTO usage(principal,ts) VALUES(%s,%s)",(principal,now))
