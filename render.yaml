@@ -1,30 +1,84 @@
-# One instance only: the job threads and SQLite live in this process.
+databases:
+  - name: price-agent-db
+    plan: free
+    region: oregon
+    databaseName: price_agent
+    user: price_agent
+
 services:
   - type: web
     name: price-agent
     runtime: python
-    plan: starter            # persistent disks need a paid plan (check Render pricing); free plans lose data on restart
+    plan: free
     buildCommand: pip install -r requirements.txt -r requirements-dev.txt && pytest -q tests/test_smoke.py tests/test_integration.py && pytest -q tests
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /healthz
-    disk:
-      name: data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: APP_ENV
         value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: price-agent-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: price-agent-queue
+          property: connectionString
+      - key: QUEUE_NAME
+        value: price-agent
       - key: OPENAI_API_KEY
-        sync: false          # secret
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: HF_TOKEN
+        sync: false
       - key: PUBLIC_URL
-        sync: false          # your https URL, e.g. https://price-agent.onrender.com (OAuth issuer)
+        sync: false
       - key: API_KEYS
-        sync: false          # secret, optional: partner keys for /api/v1
+        sync: false
       - key: ADMIN_KEY
-        sync: false          # secret, optional: enables /api/admin/stats
+        sync: false
       - key: NOMINATIM_CONTACT
-        sync: false          # your email or site (OpenStreetMap usage policy)
-      - key: DATABASE_PATH
-        value: /var/data/price-agent.db
+        sync: false
       - key: PYTHON_VERSION
         value: "3.11.9"
+
+  - type: worker
+    name: price-agent-worker
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python worker.py
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: price-agent-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: price-agent-queue
+          property: connectionString
+      - key: QUEUE_NAME
+        value: price-agent
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: HF_TOKEN
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+
+  - type: keyvalue
+    name: price-agent-queue
+    plan: free
+    region: oregon
+    maxmemoryPolicy: noeviction
