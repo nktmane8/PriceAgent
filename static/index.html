@@ -69,7 +69,7 @@ button:disabled{opacity:.55;cursor:wait;transform:none}
 .best .price{color:#fff}
 @keyframes rise{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
 .card h2{font-size:15px;letter-spacing:-.015em;margin:0 0 12px}.row{display:flex;justify-content:space-between;align-items:baseline;gap:14px}.site{font-weight:750}.price{font-size:22px;font-weight:850;letter-spacing:-.04em}.muted{color:var(--muted);font-size:12px}.oos{color:#b42318;font-size:12px}ul{margin:9px 0;padding-left:18px}a.open{display:inline-block;margin-top:10px;padding:9px 12px;font-size:12px}
-.history{grid-column:1/-1}.history h2{font-size:15px}.history svg{display:block;width:100%;height:110px;margin-top:10px}.history .spark{fill:none;stroke:var(--accent);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}.history .grid{stroke:var(--line);stroke-width:1}.history circle{fill:#fff;stroke:var(--accent);stroke-width:2}.caption{display:flex;justify-content:space-between;gap:12px;margin-top:4px}
+.seller-box{margin-top:14px;padding:12px;background:var(--soft);border:1px solid var(--line)}.seller-title{font-size:10px;text-transform:uppercase;letter-spacing:.12em;font-weight:800;color:var(--accent);margin-bottom:4px}.seller-name{font-weight:800;margin-bottom:3px}.seller-box ul{margin-bottom:4px}.history{grid-column:1/-1}.history h2{font-size:15px}.history svg{display:block;width:100%;height:110px;margin-top:10px}.history .spark{fill:none;stroke:var(--accent);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}.history .grid{stroke:var(--line);stroke-width:1}.history circle{fill:#fff;stroke:var(--accent);stroke-width:2}.caption{display:flex;justify-content:space-between;gap:12px;margin-top:4px}
 #ins{margin:22px 0 0;width:auto}.footer{margin-top:42px;padding-top:18px;border-top:1px solid var(--line);color:#888;font-size:11px;text-align:left;max-width:900px}
 @media(max-width:900px){main{padding:0 18px 50px}.card{grid-column:span 6}.search-hero{padding-top:45px}}
 @media(max-width:620px){main{padding:0 12px 38px}.topbar{height:62px}.navlink{display:none}.hero-actions{gap:2px}.live{display:none}.search-hero{padding:40px 0 30px}.search-hero h2{font-size:40px}.line{flex-direction:column}.line:last-of-type{flex-direction:row}.line button{width:100%}.card{grid-column:1/-1}.discovery{align-items:flex-start;flex-direction:column;gap:4px}}
@@ -79,7 +79,7 @@ button:disabled{opacity:.55;cursor:wait;transform:none}
 </head>
 <body>
 <main>
-  <header class="topbar"><div class="brand"><div class="logo">PA</div><div><h1>PriceAgent</h1></div></div><nav class="hero-actions" aria-label="Application links"><a class="navlink" href="/docs" target="_blank" rel="noopener noreferrer">API Docs</a><a class="navlink" href="/mcp" target="_blank" rel="noopener noreferrer">MCP</a><span id="userState" class="live">Checking login…</span><button id="login" type="button" class="alt">Sign in</button><button id="logout" type="button" class="alt" hidden>Sign out</button></nav></header>
+  <header class="topbar"><div class="brand"><div class="logo">PA</div><div><h1>PriceAgent</h1></div></div><nav class="hero-actions" aria-label="Application links"><a class="navlink" href="/docs" target="_blank" rel="noopener noreferrer">API Docs</a><a class="navlink" href="/mcp" target="_blank" rel="noopener noreferrer">MCP</a><span id="userState" class="live" hidden>Checking login…</span><button id="login" type="button" class="alt">Sign in</button><button id="logout" type="button" class="alt" hidden>Sign out</button></nav></header>
 <section class="search-hero">
   <div class="eyebrow">AI shopping intelligence</div>
   <h2>Find the right product.<br>At the right price.</h2>
@@ -342,6 +342,18 @@ function render(data) {
     c.append(el("div", "Listed price: " + money(item.price, cur), "muted"));
     if (item.in_stock === false) c.append(el("div", "Out of stock", "oos"));
     if (item.store_rating != null) c.append(el("div", "Store rating: " + Number(item.store_rating).toFixed(1) + (item.rating_count ? " (" + Number(item.rating_count).toLocaleString() + " ratings)" : ""), "muted"));
+    if (item.seller_name) {
+      const seller = el("div", undefined, "seller-box");
+      seller.append(el("div", "Seller details", "seller-title"));
+      seller.append(el("div", item.seller_name, "seller-name"));
+      const sellerMeta = [item.seller_type, item.seller_rating != null ? "Seller rating " + Number(item.seller_rating).toFixed(1) + "/5" : "", item.seller_review_count ? Number(item.seller_review_count).toLocaleString() + " seller reviews" : ""].filter(Boolean).join(" · ");
+      if (sellerMeta) seller.append(el("div", sellerMeta, "muted"));
+      if (item.seller_review_summary) seller.append(el("div", item.seller_review_summary));
+      if (item.seller_review_highlights && item.seller_review_highlights.length) seller.append(list(item.seller_review_highlights));
+      const sr = openLink("View seller reviews", item.seller_reviews_url || item.seller_url);
+      if (sr) seller.append(sr);
+      c.append(seller);
+    }
     if (item.deal_type) c.append(el("div", "Deal: " + item.deal_type, "muted"));
     if (item.address) c.append(el("div", item.address, "muted"));
     if (item.phone) {
