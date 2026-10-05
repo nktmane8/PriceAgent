@@ -9,7 +9,6 @@ import json
 import os
 import re
 import secrets
-import sqlite3
 import time
 from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit, urlunsplit
 import requests
@@ -21,8 +20,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 import config
 import db
-from constants import (LOGIN_ACCOUNT_LIMIT, LOGIN_IP_LIMIT, LOGIN_WINDOW, PASSWORD_MIN, REGISTER_IP_LIMIT,
-                       TOKEN_IP_LIMIT)
+from constants import (REGISTER_IP_LIMIT, TOKEN_IP_LIMIT)
 from util import client_ip
 
 router = APIRouter()
@@ -40,21 +38,6 @@ def sha(s):
 def b64url(b):
     """URL-safe base64 without padding (PKCE)."""
     return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
-
-
-def hash_pw(pw):
-    """Salted scrypt hash of a password."""
-    salt = os.urandom(16)
-    return salt.hex() + ":" + hashlib.scrypt(pw.encode(), salt=salt, n=2**14, r=8, p=1).hex()
-
-
-def check_pw(pw, stored):
-    """Constant-time password check."""
-    salt, h = stored.split(":")
-    return hmac.compare_digest(hashlib.scrypt(pw.encode(), salt=bytes.fromhex(salt), n=2**14, r=8, p=1).hex(), h)
-
-
-DUMMY_HASH = hash_pw("not-a-real-password")  # used so unknown emails take the same time as wrong passwords
 
 
 def valid_redirect(uri):
@@ -170,11 +153,14 @@ def _google_state_read(state):
         return None
 
 def login_page(rid, client_name, msg="", status=200):
+    """Google-only authorization page; password authentication is intentionally unavailable."""
     e = html.escape
-    google = ""
     if config.GOOGLE_CLIENT_ID:
-        google = "<p><a href='/oauth/google/start?request_id=" + e(rid) + "' style='display:block;text-align:center;padding:11px;background:#fff;border:1px solid #aaa;border-radius:4px;text-decoration:none;color:#222;font-weight:600'>Continue with Google</a></p><p style='text-align:center'>or use email/password</p>"
-    return page("<h1>Price Comparison Agent</h1><p><b>" + e(client_name) + "</b> wants to compare prices on your behalf (permission: <code>" + e(config.SCOPE) + "</code>).</p><p class=e>" + e(msg) + "</p>" + google + "<form method=post action='/oauth/authorize'><input type=hidden name=request_id value='" + e(rid) + "'><input name=email type=email placeholder=Email autocomplete=username><input name=password type=password placeholder='Password' autocomplete=current-password><button name=action value=login>Sign in with email</button><button name=action value=signup>Create account</button><button name=action value=deny formnovalidate>Deny</button></form>", status)
+        auth = "<p><a href='/oauth/google/start?request_id=" + e(rid) + "' style='display:block;text-align:center;padding:11px;background:#fff;border:1px solid #aaa;border-radius:4px;text-decoration:none;color:#222;font-weight:600'>Continue with Google</a></p>"
+    else:
+        auth = "<p class=e>Google sign-in is not configured.</p>"
+    return page("<h1>Price Comparison Agent</h1><p><b>" + e(client_name) + "</b> wants to compare prices on your behalf (permission: <code>" + e(config.SCOPE) + "</code>).</p><p class=e>" + e(msg) + "</p>" + auth + "<form method=post action='/oauth/authorize'><input type=hidden name=request_id value='" + e(rid) + "'><button name=action value=deny formnovalidate>Deny</button></form>", status)
+
 def back(uri, **params):
     """Redirect to the client's redirect URI with extra query parameters."""
     u = urlsplit(uri)
@@ -260,12 +246,11 @@ def google_callback(code: str | None = None, state: str | None = None, error: st
         if u:
             if u["google_sub"] and u["google_sub"] != google_sub:
                 return page("<p class=e>This email is linked to a different Google account.</p>", 409)
-            c.execute("UPDATE users SET google_sub=?, auth_provider='google' WHERE id=?", (google_sub, u["id"]))
+            c.execute("UPDATE users SET google_sub=?, auth_provider='google', pw_hash=NULL WHERE id=?", (google_sub, u["id"]))
             uid = u["id"]
         else:
-            pw = hash_pw(secrets.token_urlsafe(32))
             row = c.execute("INSERT INTO users(email,pw_hash,google_sub,auth_provider,created_at) VALUES(?,?,?,?,?) RETURNING id",
-                            (email, pw, google_sub, "google", time.time())).fetchone()
+                            (email, None, google_sub, "google", time.time())).fetchone()
             uid = row["id"]
     code_value = secrets.token_urlsafe(32)
     with db.conn() as c:
@@ -274,58 +259,21 @@ def google_callback(code: str | None = None, state: str | None = None, error: st
         c.execute("DELETE FROM oauth_requests WHERE id=?", (rid,))
     return back(rq["redirect_uri"], code=code_value, state=rq["state"], iss=config.PUBLIC_URL)
 
-@router.post("/oauth/authorize")
-async def authorize_post(request: Request):
-    """Handle sign-in or sign-up, then redirect back with a one-time code."""
-    f = await form(request)
-    with db.conn() as c:
-        rq = c.execute("SELECT r.*, c.name FROM oauth_requests r JOIN oauth_clients c USING(client_id) "
-                       "WHERE r.id=? AND r.expires_at>?", (f.get("request_id", ""), time.time())).fetchone()
-    if not rq:
-        return page("<p class=e>This sign-in link expired. Go back to the app and try again.</p>", 400)
-    ru, state, iss = rq["redirect_uri"], rq["state"], config.PUBLIC_URL
-
-    def finish(**kw):  # a request id is single use
-        with db.conn() as c:
-            c.execute("DELETE FROM oauth_requests WHERE id=?", (rq["id"],))
-        return back(ru, state=state, iss=iss, **kw)
-
-    if f.get("action") == "deny":
-        return finish(error="access_denied")
-    email, pw = (f.get("email") or "").strip().lower()[:200], f.get("password") or ""
-    # Brute-force protection: per IP and per account.
-    if db.rate_check("login-ip:" + client_ip(request), LOGIN_IP_LIMIT, LOGIN_WINDOW) or db.rate_check("login-em:" + email, LOGIN_ACCOUNT_LIMIT, LOGIN_WINDOW):
-        return login_page(rq["id"], rq["name"], "Too many attempts. Wait 15 minutes.", 429)
-    uid = None
-    if f.get("action") == "signup":
-        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or len(pw) < PASSWORD_MIN:
-            return login_page(rq["id"], rq["name"], "Enter a valid email and a password of 10+ characters.", 400)
-        try:
-            with db.conn() as c:
-                row = c.execute("INSERT INTO users(email,pw_hash,created_at) VALUES(?,?,?) RETURNING id",
-                                (email, hash_pw(pw), time.time())).fetchone()
-            uid = row["id"]
-        except sqlite3.IntegrityError:
-            return login_page(rq["id"], rq["name"], "That email already has an account. Use Sign in.", 400)
-    else:
-        with db.conn() as c:
-            u = c.execute("SELECT id, pw_hash FROM users WHERE email=?", (email,)).fetchone()
-        if check_pw(pw, u["pw_hash"] if u else DUMMY_HASH) and u:
-            uid = u["id"]
-        else:
-            return login_page(rq["id"], rq["name"], "Wrong email or password.", 401)
-    code = secrets.token_urlsafe(32)
-    with db.conn() as c:
-        c.execute("INSERT INTO oauth_codes VALUES(?,?,?,?,?,?,?,?)",
-                  (sha(code), rq["client_id"], uid, ru, rq["challenge"], rq["scope"], rq["resource"],
-                   time.time() + config.CODE_TTL))
-    return finish(code=code)
-
-
 # ---- token endpoint ---------------------------------------------------------------
 def issue(client_id, user_id, scope, resource, family):
-    """Create and store an access + refresh token pair in a token family."""
-    access, refresh, now = secrets.token_urlsafe(32), secrets.token_urlsafe(32), time.time()
+    """Create a signed JWT access token plus a rotated opaque refresh token."""
+    import jwt
+    now = int(time.time())
+    access = jwt.encode({
+        "iss": config.PUBLIC_URL,
+        "sub": str(user_id),
+        "aud": resource,
+        "scope": scope,
+        "iat": now,
+        "exp": now + config.ACCESS_TTL,
+        "jti": secrets.token_urlsafe(18),
+    }, config.JWT_SECRET, algorithm="HS256")
+    refresh = secrets.token_urlsafe(32)
     with db.conn() as c:
         c.execute("INSERT INTO oauth_tokens(hash,kind,family,client_id,user_id,scope,resource,expires_at) VALUES(?,?,?,?,?,?,?,?)",
                   (sha(access), "access", family, client_id, user_id, scope, resource, now + config.ACCESS_TTL))
@@ -381,23 +329,33 @@ async def revoke(request: Request):
 
 
 def verify_access_token(t):
-    """Return the token row if valid, else None."""
+    """Cryptographically validate the JWT and enforce DB revocation/resource binding."""
+    if not t:
+        return None
+    import jwt
+    try:
+        claims = jwt.decode(
+            t, config.JWT_SECRET, algorithms=["HS256"], issuer=config.PUBLIC_URL,
+            options={"require": ["exp", "iat", "sub", "iss", "aud", "scope", "jti"], "verify_aud": False},
+        )
+    except Exception:
+        return None
+    resource = claims.get("aud")
+    if resource not in resources():
+        return None
     with db.conn() as c:
         r = c.execute("SELECT * FROM oauth_tokens WHERE hash=? AND kind='access' AND revoked=0 AND expires_at>?",
                       (sha(t), time.time())).fetchone()
-    return dict(r) if r else None
+    if not r or str(r["user_id"]) != str(claims["sub"]) or r["resource"] != resource or r["scope"] != claims["scope"]:
+        return None
+    return dict(r) | {"jwt": claims}
 
-
-def delete_user(uid, password):
-    """Delete an account and everything tied to it. Returns 'ok', 'bad_password' or 'limited'."""
+def delete_user(uid):
+    """Delete an account and all data tied to it after Google authentication."""
     if db.rate_check(f"delacct:{uid}", 5, 900):
         return "limited"
-    with db.conn() as c:
-        u = c.execute("SELECT pw_hash FROM users WHERE id=?", (uid,)).fetchone()
-    if not u or not check_pw(password, u["pw_hash"]):
-        return "bad_password"
     mine = (f"user:{uid}", f"user:{uid}:insights")
-    with db.tx() as c:  # one transaction: all or nothing
+    with db.tx() as c:
         c.execute("DELETE FROM oauth_tokens WHERE user_id=?", (uid,))
         c.execute("DELETE FROM oauth_codes WHERE user_id=?", (uid,))
         c.execute("DELETE FROM jobs WHERE principal IN (?,?)", mine)
