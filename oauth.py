@@ -1,6 +1,6 @@
 """Minimal OAuth 2.1 authorization server for AI clients.
 Authorization code + PKCE (S256 only), public clients, dynamic client registration,
-refresh-token rotation with reuse detection. Accounts: email + scrypt-hashed password."""
+refresh-token rotation with reuse detection. Accounts: Google-verified identity only."""
 import base64
 import hashlib
 import hmac
@@ -159,7 +159,8 @@ def login_page(rid, client_name, msg="", status=200):
         auth = "<p><a href='/oauth/google/start?request_id=" + e(rid) + "' style='display:block;text-align:center;padding:11px;background:#fff;border:1px solid #aaa;border-radius:4px;text-decoration:none;color:#222;font-weight:600'>Continue with Google</a></p>"
     else:
         auth = "<p class=e>Google sign-in is not configured.</p>"
-    return page("<h1>Price Comparison Agent</h1><p><b>" + e(client_name) + "</b> wants to compare prices on your behalf (permission: <code>" + e(config.SCOPE) + "</code>).</p><p class=e>" + e(msg) + "</p>" + auth + "<form method=post action='/oauth/authorize'><input type=hidden name=request_id value='" + e(rid) + "'><button name=action value=deny formnovalidate>Deny</button></form>", status)
+    return page("<h1>Price Comparison Agent</h1><p><b>" + e(client_name) + "</b> wants to compare prices on your behalf (permission: <code>" + e(config.SCOPE) + "</code>).</p><p class=e>" + e(msg) + "</p>" + auth + "<p>If you do not want to authorize this app, close this page.</p>", status)
+
 
 def back(uri, **params):
     """Redirect to the client's redirect URI with extra query parameters."""
