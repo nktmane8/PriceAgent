@@ -9,6 +9,7 @@ import time
 
 import openai
 from openai import OpenAI
+from google import genai
 
 import config
 from constants import MAX_ALTERNATIVES, MAX_OFFERS, MAX_RESULTS, MAX_REVIEWS, REVIEW_SOURCE_TYPES
@@ -146,88 +147,140 @@ def clean_insights(data) -> dict:
             "reviews": reviews, "alternatives": alts, "notes": _s(data.get("notes"), 1000)}
 
 
-def _converse(system, prompt, max_uses, max_tokens):
-    """Call OpenAI Responses API with web search and return text plus usage."""
-    api_key = os.environ.get("OPENAI_API_KEY")  # never hardcoded
+
+def _gemini_usage(interaction):
+    meta = getattr(interaction, "usage_metadata", None)
+    return {
+        "input_tokens": getattr(meta, "prompt_token_count", 0) or 0,
+        "output_tokens": getattr(meta, "candidates_token_count", 0) or 0,
+        "searches": sum(
+            1 for item in (getattr(interaction, "steps", None) or [])
+            if getattr(item, "type", None) == "google_search_call"
+        ),
+    }
+
+
+def _converse_openai(system, prompt, max_tokens):
+    api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise AgentError("Server is missing OPENAI_API_KEY.")
-    # Disable SDK-level retries so we have one explicit, observable retry policy.
-    # Otherwise a single user request can silently fan out into SDK retries plus
-    # application retries, making 429s harder to diagnose and increasing load.
     client = OpenAI(api_key=api_key, timeout=120.0, max_retries=0)
-    usage = {"input_tokens": 0, "output_tokens": 0, "searches": 0}
+    response = client.responses.create(
+        model=config.OPENAI_MODEL,
+        instructions=system,
+        input=prompt,
+        tools=[{"type": "web_search"}],
+        max_output_tokens=max_tokens,
+    )
+    return response.output_text, {
+        "input_tokens": getattr(response.usage, "input_tokens", 0) or 0,
+        "output_tokens": getattr(response.usage, "output_tokens", 0) or 0,
+        "searches": sum(
+            1 for item in (response.output or [])
+            if getattr(item, "type", None) == "web_search_call"
+        ),
+    }
+
+
+def _converse_gemini(system, prompt, max_tokens):
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise AgentError("Server is missing GEMINI_API_KEY.")
+    client = genai.Client(api_key=api_key)
+    interaction = client.interactions.create(
+        model=config.GEMINI_MODEL,
+        input=f"{system}\n\n{prompt}",
+        tools=[{"type": "google_search"}],
+        generation_config={"max_output_tokens": max_tokens},
+    )
+    return interaction.output_text, _gemini_usage(interaction)
+
+
+def _provider_order():
+    configured = config.AI_PROVIDER.lower().strip()
+    if configured == "auto":
+        names = ["gemini", "openai"]
+    else:
+        names = [x.strip().lower() for x in configured.split(",") if x.strip()]
+    return [x for x in names if x in {"gemini", "openai"}]
+
+
+def _converse(system, prompt, max_uses, max_tokens):
     logger = logging.getLogger("price-agent")
+    providers = _provider_order()
+    if not providers:
+        raise AgentError("No AI provider is configured.")
+    errors = []
 
-    for attempt in range(config.AI_MAX_RETRIES + 1):
-        try:
-            with _AI_SEMAPHORE:
-                response = client.responses.create(
-                    model=config.MODEL,
-                    instructions=system,
-                    input=prompt,
-                    tools=[{"type": "web_search"}],
-                    max_output_tokens=max_tokens,
-                )
-            u = response.usage
-            usage["input_tokens"] = getattr(u, "input_tokens", 0) or 0
-            usage["output_tokens"] = getattr(u, "output_tokens", 0) or 0
-            usage["searches"] = sum(
-                1 for item in (response.output or [])
-                if getattr(item, "type", None) == "web_search_call"
-            )
-            return response.output_text, usage
-        except openai.RateLimitError as e:
-            response = getattr(e, "response", None)
-            headers = getattr(response, "headers", {}) or {}
-            request_id = headers.get("x-request-id") or headers.get("X-Request-ID")
-            detail = {}
+    for provider in providers:
+        for attempt in range(config.AI_MAX_RETRIES + 1):
             try:
-                payload = response.json() if response is not None else {}
-                detail = payload.get("error", {}) if isinstance(payload, dict) else {}
-            except Exception:
-                pass
-
-            code = detail.get("code")
-            error_type = detail.get("type")
-            message = detail.get("message")
-            logger.error(
-                "AI provider 429: attempt=%s/%s type=%s code=%s request_id=%s message=%s",
-                attempt + 1, config.AI_MAX_RETRIES + 1, error_type, code,
-                request_id, message,
-            )
-
-            if code in ("insufficient_quota", "billing_hard_limit_reached") or error_type in (
-                "insufficient_quota", "billing_hard_limit_reached"
-            ):
-                raise AgentError(
-                    "AI provider quota/billing limit is exhausted. Check the OpenAI project billing and usage limits."
+                with _AI_SEMAPHORE:
+                    if provider == "gemini":
+                        return _converse_gemini(system, prompt, max_tokens)
+                    return _converse_openai(system, prompt, max_tokens)
+            except openai.RateLimitError as e:
+                response = getattr(e, "response", None)
+                headers = getattr(response, "headers", {}) or {}
+                detail = {}
+                try:
+                    payload = response.json() if response is not None else {}
+                    detail = payload.get("error", {}) if isinstance(payload, dict) else {}
+                except Exception:
+                    pass
+                code = detail.get("code")
+                error_type = detail.get("type")
+                logger.error(
+                    "AI provider 429: provider=%s attempt=%s/%s type=%s code=%s",
+                    provider, attempt + 1, config.AI_MAX_RETRIES + 1, error_type, code,
                 )
-
-            if attempt >= config.AI_MAX_RETRIES:
-                raise AgentError(
-                    "AI provider is temporarily rate-limited. Please retry after a short delay."
+                if code in ("insufficient_quota", "billing_hard_limit_reached") or error_type in (
+                    "insufficient_quota", "billing_hard_limit_reached"
+                ):
+                    errors.append(f"{provider}: quota exhausted")
+                    break
+                if attempt >= config.AI_MAX_RETRIES:
+                    errors.append(f"{provider}: rate limited")
+                    break
+                retry_after = headers.get("retry-after") or headers.get("Retry-After")
+                try:
+                    delay = min(config.AI_MAX_RETRY_DELAY, max(1, int(float(retry_after))))
+                except (TypeError, ValueError):
+                    delay = min(config.AI_MAX_RETRY_DELAY, 2 ** attempt)
+                time.sleep(delay)
+            except openai.APIConnectionError:
+                if attempt >= config.AI_MAX_RETRIES:
+                    errors.append(f"{provider}: connection failure")
+                    break
+                time.sleep(min(config.AI_MAX_RETRY_DELAY, 2 ** attempt))
+            except openai.APITimeoutError:
+                if attempt >= config.AI_MAX_RETRIES:
+                    errors.append(f"{provider}: timeout")
+                    break
+                time.sleep(min(config.AI_MAX_RETRY_DELAY, 2 ** attempt))
+            except openai.APIError as e:
+                errors.append(f"{provider}: API error")
+                logger.error("AI provider API error: provider=%s error=%s", provider, e)
+                break
+            except AgentError:
+                raise
+            except Exception as e:
+                message = str(e).lower()
+                retryable = any(x in message for x in (
+                    "429", "resource_exhausted", "503", "unavailable", "timeout"
+                ))
+                logger.error(
+                    "AI provider error: provider=%s attempt=%s/%s error=%s",
+                    provider, attempt + 1, config.AI_MAX_RETRIES + 1, e,
                 )
+                if retryable and attempt < config.AI_MAX_RETRIES:
+                    time.sleep(min(config.AI_MAX_RETRY_DELAY, 2 ** attempt))
+                    continue
+                errors.append(f"{provider}: {type(e).__name__}")
+                break
 
-            retry_after = headers.get("retry-after") or headers.get("Retry-After")
-            try:
-                delay = min(config.AI_MAX_RETRY_DELAY, max(1, int(float(retry_after))))
-            except (TypeError, ValueError):
-                delay = min(config.AI_MAX_RETRY_DELAY, 2 ** attempt)
-            time.sleep(delay)
-
-        except openai.APIConnectionError:
-            if attempt >= config.AI_MAX_RETRIES:
-                raise AgentError("AI provider could not be reached. Please retry shortly.")
-            time.sleep(min(config.AI_MAX_RETRY_DELAY, 2 ** attempt))
-        except openai.APITimeoutError:
-            if attempt >= config.AI_MAX_RETRIES:
-                raise AgentError("AI provider timed out. Please retry shortly.")
-            time.sleep(min(config.AI_MAX_RETRY_DELAY, 2 ** attempt))
-        except openai.APIError as e:
-            message = getattr(e, "message", None) or str(e)
-            logger.error("AI provider API error: %s", message)
-            raise AgentError("AI provider returned an error. Please retry shortly.")
-
+    if errors:
+        raise AgentError("All configured AI providers failed. Try again shortly.")
     raise AgentError("AI provider request failed.")
 
 def _parse(text, cleaner):
