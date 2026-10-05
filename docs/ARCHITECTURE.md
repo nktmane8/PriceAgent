@@ -270,9 +270,9 @@ Core metrics:
 
 Spring Boot provides production features such as health checks and metrics, with Actuator/Micrometer forming the base for the observability layer. citeturn0search0turn0search7
 
-## Migration structure
+## Current implementation status\n\nThe Python application now contains the target distributed building blocks: PostgreSQL storage, Redis/Valkey-backed RQ jobs, a dedicated worker, multi-provider AI routing, OAuth-protected browser/API flows and OAuth-protected MCP. These components are implemented in code, but the Render workspace still needs the Postgres/Key Value/worker resources provisioned and end-to-end validated before this architecture is considered production-stable.\n\n## Migration structure
 
-Phase 1: stabilize Python
+Phase 0: release-gate the Python reference implementation\n- complete Postgres/Valkey/worker deployment validation\n- complete OAuth/MCP interoperability tests\n- complete backup/restore, load and failure drills\n- freeze API, MCP and behavioral contracts\n\nPhase 1: stabilize Python
 - provider fallback
 - automated tests
 - Render deployment verification
