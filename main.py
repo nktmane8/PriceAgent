@@ -150,7 +150,7 @@ def read_job(job_id: str, who=Depends(web_user)):
     job = db.job_get(job_id)
     if not job:
         raise HTTPException(404, "Unknown job.")
-    if principal.startswith("user:") and job.get("principal") != principal:
+    if principal.startswith("user:") and job.get("principal", "").split(":")[:2] != principal.split(":")[:2]:
         raise HTTPException(403, "You do not have access to this job.")
     return respond(job)
 
@@ -169,6 +169,9 @@ def job_v1(job_id: str, who=Depends(partner)):
     job = db.job_get(job_id)
     if not job:
         raise HTTPException(404, "Unknown job.")
+    principal, _ = who
+    if principal.startswith("user:") and job.get("principal", "").split(":")[:2] != principal.split(":")[:2]:
+        raise HTTPException(403, "You do not have access to this job.")
     return respond(job)
 
 
