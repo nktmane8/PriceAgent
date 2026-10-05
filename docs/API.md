@@ -25,3 +25,17 @@ Partner API keys are read from the comma-separated `API_KEYS` environment variab
 curl -X POST $URL/api/v1/compare -H "X-API-Key: $KEY" -H "Content-Type: application/json" \
   -d '{"product":"Samsung Galaxy S24 256GB","country":"India","city":"Pune"}'
 ```
+
+
+## Error contract
+
+Job failures include a stable `error_code` alongside the human-readable `error`.
+
+Supported codes:
+`INVALID_REQUEST`, `AUTH_REQUIRED`, `FORBIDDEN`, `JOB_NOT_FOUND`, `RATE_LIMITED`, `QUEUE_UNAVAILABLE`, `UPSTREAM_TIMEOUT`, `UPSTREAM_UNAVAILABLE`, `AI_QUOTA_EXHAUSTED`, `AI_PROVIDER_EXHAUSTED`, `INVALID_PROVIDER_RESPONSE`, `JOB_FAILED`, `INTERNAL_ERROR`.
+
+OAuth resource binding is strict:
+- REST API tokens: `resource = PUBLIC_URL`
+- MCP tokens: `resource = PUBLIC_URL/mcp`
+
+A job may be read only by the principal that created it. Cross-principal REST access returns HTTP 403.
