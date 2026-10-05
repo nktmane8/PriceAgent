@@ -19,10 +19,15 @@ Request body: `{"product": "iPhone 15 128GB Black", "country": "India", "city": 
 Job response: `{"job_id", "status": "queued|running|done|error", "result"?, "cached"?, "error"?}`.
 Result: `{product, region, currency, results:[{site, store_type, location, price, effective_price, offers[], in_stock, url}], best_deal, notes}`.
 Errors: 401 auth, 422 bad input, 429 rate limit (message has minutes to wait), 404 unknown job.
-Partner API keys are read from the comma-separated `API_KEYS` environment variable. Generate a random 20+ character key, replace the old value in `.env` or your host dashboard, restart the service, then send it in `X-API-Key`.
+Authentication flow:
+1. Authenticate with Google through the PriceAgent OAuth authorization server.
+2. PriceAgent verifies the Google identity and PKCE-bound authorization code.
+3. PriceAgent issues its own signed JWT access token plus an opaque refresh token.
+4. Protected APIs receive `Authorization: Bearer <PriceAgent-JWT>`.
+5. Each protected request validates JWT signature, issuer, audience/resource, expiry, subject, scope and token database state/revocation.
 
 ```bash
-curl -X POST $URL/api/v1/compare -H "X-API-Key: $KEY" -H "Content-Type: application/json" \
+curl -X POST $URL/api/v1/compare -H "Authorization: Bearer $PRICEAGENT_ACCESS_TOKEN" -H "Content-Type: application/json" \
   -d '{"product":"Samsung Galaxy S24 256GB","country":"India","city":"Pune"}'
 ```
 
@@ -38,4 +43,4 @@ OAuth resource binding is strict:
 - REST API tokens: `resource = PUBLIC_URL`
 - MCP tokens: `resource = PUBLIC_URL/mcp`
 
-A job may be read only by the principal that created it. Cross-principal REST access returns HTTP 403. Google is the identity provider; the PriceAgent JWT is the credential used to authorize each protected REST request.
+A job may be read only by the principal that created it. Cross-principal REST access returns HTTP 403. Google is the identity provider; the PriceAgent JWT is the API authorization credential. Google is the identity provider; the PriceAgent JWT is the credential used to authorize each protected REST request.
