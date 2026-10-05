@@ -395,6 +395,20 @@ const GROUPS = [["publication", "Newspaper and publication reviews"], ["video", 
 function renderInsights(d) {
   insights.replaceChildren();
   if (d.verdict) { const c = card("Why people buy it"); c.append(el("div", d.verdict)); insights.append(c); }
+  if (d.overall_review) { const c = card("Overall product review"); c.append(el("div", d.overall_review)); insights.append(c); }
+  if (Array.isArray(d.rating_sources) && d.rating_sources.length) {
+    const c = card("Ratings across sources");
+    for (const r of d.rating_sources) {
+      const row = el("div", undefined, "row");
+      row.append(el("span", r.source || "Source", "site"),
+                 el("span", Number(r.rating).toFixed(1) + "/" + Number(r.scale || 5), "price"));
+      const meta = [r.count != null ? r.count.toLocaleString() + " ratings/reviews" : "", r.basis === "snippet_only" ? "snippet only" : ""].filter(Boolean).join(" · ");
+      c.append(row);
+      if (meta) c.append(el("div", meta, "muted"));
+      const a = openLink("Open rating source", r.url); if (a) c.append(a);
+    }
+    insights.append(c);
+  }
   if ((d.pros || []).length || (d.cons || []).length) {
     const c = card("What reviewers say");
     if (d.pros.length) { c.append(el("div", "Praised for", "muted"), list(d.pros)); }
@@ -430,6 +444,8 @@ function renderInsights(d) {
       if ((x.better_at || []).length) c.append(el("div", "Better at: " + x.better_at.join(", "), "muted"));
       if (x.trade_off) c.append(el("div", "Trade-off: " + x.trade_off, "muted"));
       const a = openLink("Learn more", x.url); if (a) c.append(a);
+      const buy = openLink("Buy similar product", x.buy_url || x.url);
+      if (buy) c.append(buy);
     }
     insights.append(c);
   }
