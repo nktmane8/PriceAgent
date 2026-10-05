@@ -49,6 +49,7 @@ KEY_RATE_LIMIT = _int("KEY_RATE_LIMIT", 60)                 # API keys: per key 
 LOCATE_LIMIT = _int("LOCATE_LIMIT", 20)                     # location lookups per IP per hour
 CACHE_TTL = _int("CACHE_TTL_SECONDS", 1800)                 # 30 minutes
 WORKERS = _int("WORKERS", 4)                                # background threads running the agent
+AI_CONCURRENCY = _int("AI_CONCURRENCY", 2)                    # max concurrent OpenAI requests per process
 JOB_WAIT = _int("JOB_WAIT_SECONDS", 50)                     # sync/MCP wait before returning a job id
 DB_PATH = os.environ.get("DATABASE_PATH", "data/price-agent.db")
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "priceagent.onrender.com").rstrip("/")
