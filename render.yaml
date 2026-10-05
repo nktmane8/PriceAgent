@@ -32,6 +32,10 @@ services:
         sync: false
       - key: GOOGLE_PLACES_API_KEY
         sync: false
+      - key: GA4_MEASUREMENT_ID
+        sync: false
+      - key: GOOGLE_SEARCH_CONSOLE_VERIFICATION
+        sync: false
       - key: GEMINI_API_KEY
         sync: false
       - key: GROQ_API_KEY
