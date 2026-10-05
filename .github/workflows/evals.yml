@@ -9,7 +9,7 @@ jobs:
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - if: env.OPENAI_API_KEY != ''
         uses: actions/setup-python@v5
         with:
