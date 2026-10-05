@@ -95,7 +95,7 @@ def as_metadata():
             "registration_endpoint": u + "/oauth/register", "revocation_endpoint": u + "/oauth/revoke",
             "response_types_supported": ["code"], "grant_types_supported": ["authorization_code", "refresh_token"],
             "code_challenge_methods_supported": ["S256"], "token_endpoint_auth_methods_supported": ["none"],
-            "scopes_supported": [config.SCOPE], "authorization_response_iss_parameter_supported": True}
+            "scopes_supported": [config.SCOPE], "authorization_response_iss_parameter_supported": True, "client_id_metadata_document_supported": False}
 
 
 @router.get("/.well-known/oauth-protected-resource")
@@ -213,8 +213,9 @@ async def authorize_post(request: Request):
             return login_page(rq["id"], rq["name"], "Enter a valid email and a password of 10+ characters.", 400)
         try:
             with db.conn() as c:
-                uid = c.execute("INSERT INTO users(email,pw_hash,created_at) VALUES(?,?,?)",
-                                (email, hash_pw(pw), time.time())).lastrowid
+                row = c.execute("INSERT INTO users(email,pw_hash,created_at) VALUES(?,?,?) RETURNING id",
+                                (email, hash_pw(pw), time.time())).fetchone()
+            uid = row["id"]
         except sqlite3.IntegrityError:
             return login_page(rq["id"], rq["name"], "That email already has an account. Use Sign in.", 400)
     else:
