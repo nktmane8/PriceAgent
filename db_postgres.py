@@ -33,7 +33,7 @@ SCHEMA=[
 "CREATE TABLE IF NOT EXISTS price_history(id BIGSERIAL PRIMARY KEY,key TEXT NOT NULL,store TEXT NOT NULL,price DOUBLE PRECISION,effective_price DOUBLE PRECISION,currency TEXT,ts DOUBLE PRECISION NOT NULL)",
 "CREATE INDEX IF NOT EXISTS ix_hist ON price_history(key,ts)",
 "CREATE TABLE IF NOT EXISTS products(id BIGSERIAL PRIMARY KEY,canonical_key TEXT UNIQUE NOT NULL,display_name TEXT NOT NULL,brand TEXT,variant TEXT,storage TEXT,color TEXT,created_at DOUBLE PRECISION NOT NULL,updated_at DOUBLE PRECISION NOT NULL)",
-"CREATE INDEX IF NOT EXISTS ix_products_brand ON products(brand)"
+"CREATE INDEX IF NOT EXISTS ix_products_brand ON products(brand)",\n"CREATE TABLE IF NOT EXISTS analytics_events(id BIGSERIAL PRIMARY KEY,name TEXT NOT NULL,product TEXT,store TEXT,metadata TEXT,ts DOUBLE PRECISION NOT NULL)",\n"CREATE INDEX IF NOT EXISTS ix_analytics_ts ON analytics_events(ts)",\n"CREATE INDEX IF NOT EXISTS ix_analytics_name ON analytics_events(name)"
 ]
 
 @contextmanager
