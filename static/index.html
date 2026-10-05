@@ -275,6 +275,11 @@ function render(data) {
       p.rel = "noopener noreferrer";
       c.append(p);
     }
+    if (item.maps_url && item.maps_url.startsWith("http")) {
+      const m = el("a", "View store on Maps", "open");
+      m.href = item.maps_url; m.target = "_blank"; m.rel = "noopener noreferrer";
+      c.append(m);
+    }
     if (Array.isArray(item.offers) && item.offers.length) {
       const ul = el("ul");
       item.offers.forEach(o => ul.append(el("li", String(o))));
