@@ -6,6 +6,31 @@
 <title>PriceAgent — AI Price Intelligence</title>
 <meta name="description" content="PriceAgent discovers and compares live product prices across stores for your region.">
 <meta name="theme-color" content="#087f5b">
+<meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
+<meta name="author" content="PriceAgent">
+<link rel="canonical" href="https://priceagent.onrender.com/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="PriceAgent — AI Shopping Intelligence">
+<meta property="og:description" content="Compare product prices, local deals, ratings, reviews and price history before you buy.">
+<meta property="og:url" content="https://priceagent.onrender.com/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="PriceAgent — AI Shopping Intelligence">
+<meta name="twitter:description" content="Compare trusted stores, local deals, ratings and reviews with AI-powered shopping intelligence.">
+<script>
+window.PRICEAGENT_ANALYTICS = "__GA4_MEASUREMENT_ID__";
+if (window.PRICEAGENT_ANALYTICS) {
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag("js", new Date());
+  gtag("config", window.PRICEAGENT_ANALYTICS, {send_page_view:true});
+  const s=document.createElement("script"); s.async=true;
+  s.src="https://www.googletagmanager.com/gtag/js?id="+encodeURIComponent(window.PRICEAGENT_ANALYTICS);
+  document.head.appendChild(s);
+}
+function trackEvent(name, params={}) {
+  if (typeof window.gtag === "function") window.gtag("event", name, params);
+}
+</script>
 <style>
 :root{--bg:#fff;--surface:#fff;--soft:#f7f7f5;--text:#111;--muted:#737373;--line:#e7e7e5;--accent:#3157ff;--accent-dark:#1736c9;--ink:#111;--success:#176b43;--shadow:0 14px 40px rgba(0,0,0,.07)}
 *{box-sizing:border-box}
@@ -50,6 +75,7 @@ button:disabled{opacity:.55;cursor:wait;transform:none}
 @media(max-width:620px){main{padding:0 12px 38px}.topbar{height:62px}.navlink{display:none}.hero-actions{gap:2px}.live{display:none}.search-hero{padding:40px 0 30px}.search-hero h2{font-size:40px}.line{flex-direction:column}.line:last-of-type{flex-direction:row}.line button{width:100%}.card{grid-column:1/-1}.discovery{align-items:flex-start;flex-direction:column;gap:4px}}
 :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 </style>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"PriceAgent","url":"https://priceagent.onrender.com/","description":"AI shopping intelligence for comparing product prices, local deals, ratings, reviews and price history.","potentialAction":{"@type":"SearchAction","target":"https://priceagent.onrender.com/?q={search_term_string}","query-input":"required name=search_term_string"}}</script>
 </head>
 <body>
 <main>
@@ -551,6 +577,7 @@ form.addEventListener("submit", async e => {
   last = {product: q.value.trim(), country: country.value.trim(), city: city.value.trim() || null};
   try { localStorage.setItem("pa_country", last.country); localStorage.setItem("pa_city", last.city || ""); } catch (e) {}
   try {
+    trackEvent("search", {search_term:last.product, country:last.country, city:last.city || "unknown"});
     const job = await runJob("prices", "Finding stores in your region and checking prices… This takes 30-60 seconds.");
     status.textContent = job.cached ? "Showing a recent result (under 30 minutes old)." : "";
     render(job.result);
@@ -564,6 +591,7 @@ form.addEventListener("submit", async e => {
 $("ins").addEventListener("click", async () => {
   $("ins").disabled = true; status.className = "";
   try {
+    trackEvent("view_item", {item_name:last.product});
     const job = await runJob("insights", "Reading reviews and looking for similar products… up to a minute.");
     status.textContent = "";
     renderInsights(job.result);
