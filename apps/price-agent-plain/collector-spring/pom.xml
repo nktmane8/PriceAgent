@@ -7,7 +7,7 @@
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
     <!-- Spring Boot 3.5 is out of open-source support (June 2026); 4.1.x is current. Bump to the latest 4.1.x patch. -->
-    <version>4.1.0</version>
+    <version>4.1.1</version>
     <relativePath/>
   </parent>
 
