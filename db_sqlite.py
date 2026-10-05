@@ -7,6 +7,7 @@ import time
 from contextlib import contextmanager
 
 import config
+from product_identity import normalize
 from constants import (HISTORY_DAYS, HISTORY_RETENTION_DAYS, HOUR, JOB_RETENTION_DAYS, QUEUED, SEARCH_COST_USD,
                        USAGE_RETENTION_DAYS)
 
@@ -174,8 +175,9 @@ def product_get(canonical_key):
 
 # ---- price history -----------------------------------------------------
 def history_key(product, country, city):
-    """Key used to group price history (product + country + city)."""
-    return "|".join([product.lower(), country.lower(), city.lower()])
+    """Key used to group price history by canonical product + region."""
+    identity = normalize(product)
+    return "|".join([identity["canonical_key"], country.lower(), city.lower()])
 
 
 def record_history(hkey, data):
