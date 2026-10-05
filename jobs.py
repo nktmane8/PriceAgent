@@ -2,6 +2,7 @@
 import hashlib, logging, threading, time
 from concurrent.futures import ThreadPoolExecutor
 import agent, config, db
+from product_identity import normalize
 from constants import (DONE, ERROR, FINISHED, KIND_INSIGHTS, KIND_PRICES, PURGE_INTERVAL, RUNNING,
                        AI_QUOTA_EXHAUSTED, AI_PROVIDER_EXHAUSTED, INVALID_PROVIDER_RESPONSE, JOB_FAILED,
                        QUEUE_UNAVAILABLE, INTERNAL_ERROR)
@@ -90,6 +91,8 @@ def _work(jid,key,params):
     try:
         run=agent.run_insights if params.get("kind")==KIND_INSIGHTS else agent.run_agent
         data,usage=run(params["product"],params["country"],params["city"],params["sites"])
+        identity = normalize(params["product"])
+        db.product_upsert(identity)
         db.cache_set(key,data)
         if params.get("kind",KIND_PRICES)==KIND_PRICES:
             db.record_history(db.history_key(params["product"],params["country"],params["city"]),data)
