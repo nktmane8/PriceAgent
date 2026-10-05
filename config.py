@@ -52,6 +52,8 @@ MAX_SEARCHES = _int("MAX_SEARCHES", 15)                     # web searches per p
 MAX_INSIGHT_SEARCHES = _int("MAX_INSIGHT_SEARCHES", 10)
 YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "")
 GOOGLE_PLACES_API_KEY = os.environ.get("GOOGLE_PLACES_API_KEY", "")     # searches for reviews + alternatives
+GA4_MEASUREMENT_ID = os.environ.get("GA4_MEASUREMENT_ID", "")
+GOOGLE_SEARCH_CONSOLE_VERIFICATION = os.environ.get("GOOGLE_SEARCH_CONSOLE_VERIFICATION", "")
 MAX_PAUSE_LOOPS = _int("MAX_PAUSE_LOOPS", 4)                # retained for config compatibility; Responses handles tool continuation
 RATE_LIMIT = _int("RATE_LIMIT", 5)                          # web users: comparisons per IP per hour
 USER_RATE_LIMIT = _int("USER_RATE_LIMIT", 30)               # OAuth users: per user per hour
@@ -134,4 +136,4 @@ def summary() -> dict:
             "gemini_model": GEMINI_MODEL, "openai_model": OPENAI_MODEL, "groq_model": GROQ_MODEL, "hf_model": HF_MODEL, "ollama_model": OLLAMA_MODEL, "workers": WORKERS, "free_render": FREE_RENDER, "db": DB_PATH,
             "searches": MAX_SEARCHES, "insight_searches": MAX_INSIGHT_SEARCHES, "cache_ttl": CACHE_TTL,
             "limits": [RATE_LIMIT, USER_RATE_LIMIT, KEY_RATE_LIMIT], "partner_keys": len(API_KEYS),
-            "admin_enabled": bool(ADMIN_KEY)}
+            "admin_enabled": bool(ADMIN_KEY), "ga4": bool(GA4_MEASUREMENT_ID), "search_console": bool(GOOGLE_SEARCH_CONSOLE_VERIFICATION)}
