@@ -2,7 +2,7 @@
 
 ![CI](https://github.com/nktmane8/PriceAgent/actions/workflows/ci.yml/badge.svg)
 
-Type a product and your region. The agent uses Claude with web search to find the stores that serve you (online marketplaces, brand stores, chains, local shops) and ranks them by effective price. Works as a web page, a REST API and an OAuth-protected MCP server for other AI apps.
+Type a product and your region. The agent uses OpenAI with web search to find the stores that serve you (online marketplaces, brand stores, chains, local shops) and ranks them by effective price. Works as a web page, a REST API and an OAuth-protected MCP server for other AI apps.
 
 ## Features
 - **Region-aware discovery**, not a fixed store list; country auto-filled from browser locale, **Use my location** (GPS, rounded to ~1 km) or typed manually; local currency.
@@ -21,7 +21,7 @@ Settings come from `env/.env.<APP_ENV>` (default `development`); secrets go in a
 ```bash
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-export ANTHROPIC_API_KEY="sk-ant-..."                    # PowerShell: $env:ANTHROPIC_API_KEY="sk-ant-..."
+export OPENAI_API_KEY="sk-..."                    # PowerShell: $env:OPENAI_API_KEY="sk-..."
 uvicorn main:app --reload
 ```
 Open http://127.0.0.1:8000, enter a product, confirm the country, click **Compare** (30-60 s). The database is created at `data/price-agent.db`.
@@ -30,9 +30,9 @@ After deploying, check the live app and the MCP endpoint: `python tools/smoke.py
 
 ## Deploy on Render
 1. Push to GitHub. In Render: **New > Blueprint**, choose the repo (`render.yaml`).
-2. Enter secrets: `ANTHROPIC_API_KEY`, `PUBLIC_URL` (your exact https URL), `NOMINATIM_CONTACT` (your email); optional `API_KEYS`, `ADMIN_KEY`.
+2. Enter secrets: `OPENAI_API_KEY`, `PUBLIC_URL` (your exact https URL), `NOMINATIM_CONTACT` (your email); optional `API_KEYS`, `ADMIN_KEY`.
 3. The blueprint uses a paid plan with a 1 GB disk so users, tokens and cache survive restarts (verify current pricing). Run exactly one instance.
-4. Set a monthly spend limit in the Anthropic Console.
+4. Set a monthly spend limit in the OpenAI API platform.
 
 ## Use from AI apps
 - **Claude:** Settings > Connectors > add custom connector `https://your-app/mcp`, then sign in.
@@ -45,10 +45,10 @@ After deploying, check the live app and the MCP endpoint: `python tools/smoke.py
 |---|---|---|
 | `APP_ENV` | development | development, test, staging or production; loads `env/.env.<APP_ENV>` |
 | `LOG_LEVEL` | INFO | DEBUG, INFO, WARNING |
-| `ANTHROPIC_API_KEY` | required | Secret |
+| `OPENAI_API_KEY` | required | Secret |
 | `PUBLIC_URL` | `http://127.0.0.1:8000` | Public https URL; OAuth issuer; must be exact |
 | `DATABASE_PATH` | `data/price-agent.db` | SQLite file (put on the persistent disk) |
-| `MODEL` | `claude-sonnet-5-5` | Model |
+| `MODEL` | `gpt-5.6-sol` | Model |
 | `MAX_SEARCHES` | 15 | Searches per price comparison |
 | `MAX_INSIGHT_SEARCHES` | 10 | Searches for reviews and alternatives |
 | `WORKERS` | 4 | Background threads |

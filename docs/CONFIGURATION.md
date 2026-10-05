@@ -16,8 +16,8 @@ Switch environment: `APP_ENV=staging uvicorn main:app`.
 |---|---|---|---|---|---|---|
 | `APP_ENV` | no | development | development | test | staging | production |
 | `LOG_LEVEL` | no | INFO | DEBUG | WARNING | INFO | INFO |
-| `ANTHROPIC_API_KEY` | **yes** | none (required) | shell/.env | not needed | dashboard | dashboard |
-| `MODEL` | no | claude-sonnet-5-5 | same | same | same | same |
+| `OPENAI_API_KEY` | **yes** | none (required) | shell/.env | not needed | dashboard | dashboard |
+| `MODEL` | no | gpt-5.6-sol | same | same | same | same |
 | `MAX_SEARCHES` | no | 15 | 5 | 1 | 8 | 15 |
 | `MAX_INSIGHT_SEARCHES` | no | 10 | 4 | 1 | 6 | 10 |
 | `MAX_PAUSE_LOOPS` | no | 4 | default | default | default | default |
@@ -37,7 +37,7 @@ Switch environment: `APP_ENV=staging uvicorn main:app`.
 | `PORT` | no | set by host | n/a | n/a | host | host |
 
 ## Start-up checks (`config.problems()`)
-Always: missing `ANTHROPIC_API_KEY`. Staging/production also: `PUBLIC_URL` not https; `DATABASE_PATH` not absolute; `NOMINATIM_CONTACT` unset; `API_KEYS` or `ADMIN_KEY` shorter than 20 characters. They stop the app there; elsewhere they log warnings.
+Always: missing `OPENAI_API_KEY`. Staging/production also: `PUBLIC_URL` not https; `DATABASE_PATH` not absolute; `NOMINATIM_CONTACT` unset; `API_KEYS` or `ADMIN_KEY` shorter than 20 characters. They stop the app there; elsewhere they log warnings.
 
 ## Global constants (`constants.py`)
 Not environment-specific; change only with a code review.
