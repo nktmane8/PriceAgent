@@ -61,6 +61,12 @@ AI_CONCURRENCY = _int("AI_CONCURRENCY", 2)                    # max concurrent O
 AI_MAX_RETRIES = _int("AI_MAX_RETRIES", 1)                    # explicit provider retry count
 AI_MAX_RETRY_DELAY = _int("AI_MAX_RETRY_DELAY_SECONDS", 4)     # bounded retry delay
 JOB_WAIT = _int("JOB_WAIT_SECONDS", 50)                     # sync/MCP wait before returning a job id
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+REDIS_URL = os.environ.get("REDIS_URL", "")
+QUEUE_NAME = os.environ.get("QUEUE_NAME", "price-agent")
+JOB_TIMEOUT = _int("JOB_TIMEOUT_SECONDS", 180)
+JOB_RESULT_TTL = _int("JOB_RESULT_TTL_SECONDS", 3600)
+JOB_FAILURE_TTL = _int("JOB_FAILURE_TTL_SECONDS", 86400)
 DB_PATH = os.environ.get("DATABASE_PATH", "data/price-agent.db")
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "priceagent.onrender.com").rstrip("/")
 API_KEYS = [k.strip() for k in os.environ.get("API_KEYS", "").split(",") if k.strip()]   # secret
@@ -72,6 +78,10 @@ EXTRA_ORIGINS = [o for o in os.environ.get("EXTRA_ORIGINS", "").split(",") if o]
 def problems() -> list[str]:
     """Configuration mistakes. Fatal in staging/production, warnings elsewhere."""
     p = []
+    if PRODUCTION_LIKE and not DATABASE_URL:
+        p.append("DATABASE_URL is required in staging/production")
+    if PRODUCTION_LIKE and not REDIS_URL:
+        p.append("REDIS_URL is required in staging/production")
     if AI_PROVIDER in ("gemini", "gemini,openai", "openai,gemini") and not os.environ.get("GEMINI_API_KEY"):
         p.append("GEMINI_API_KEY is required for the configured Gemini provider")
     if AI_PROVIDER in ("openai", "gemini,openai", "openai,gemini") and not os.environ.get("OPENAI_API_KEY"):
