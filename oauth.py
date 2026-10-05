@@ -99,9 +99,15 @@ def as_metadata():
 
 
 @router.get("/.well-known/oauth-protected-resource")
-def resource_metadata():  # for the REST API (the MCP SDK serves the /mcp variant itself)
+def resource_metadata():
     """Protected-resource metadata for the REST API (RFC 9728)."""
     return {"resource": config.PUBLIC_URL, "authorization_servers": [config.PUBLIC_URL],
+            "scopes_supported": [config.SCOPE], "bearer_methods_supported": ["header"]}
+
+@router.get("/mcp/.well-known/oauth-protected-resource")
+def mcp_resource_metadata():
+    """Protected-resource metadata for MCP clients discovering metadata under /mcp."""
+    return {"resource": config.PUBLIC_URL + "/mcp", "authorization_servers": [config.PUBLIC_URL],
             "scopes_supported": [config.SCOPE], "bearer_methods_supported": ["header"]}
 
 
