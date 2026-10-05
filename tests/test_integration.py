@@ -2,6 +2,7 @@ import pytest
 import openai
 
 import agent
+import main
 import io
 import json
 import urllib.request
@@ -79,14 +80,16 @@ def test_compare_api_does_not_return_200_for_failed_job(client, monkeypatch):
     assert response.json()["status"] == "error"
 
 
+
 def test_ai_rate_limit_is_classified_without_network(monkeypatch):
+    class FakeResponse:
+        headers = {"x-request-id": "req-test"}
+        def json(self):
+            return {"error": {"type": "insufficient_quota", "code": "insufficient_quota", "message": "quota exceeded"}}
+
     class FakeResponses:
         def create(self, **kwargs):
-            error = openai.RateLimitError(
-                "rate limited",
-                response=None,
-                body={"error": {"type": "insufficient_quota", "code": "insufficient_quota", "message": "quota exceeded"}},
-            )
+            error = openai.RateLimitError("rate limited", response=FakeResponse(), body=None)
             raise error
 
     class FakeClient:
@@ -94,5 +97,5 @@ def test_ai_rate_limit_is_classified_without_network(monkeypatch):
 
     monkeypatch.setattr(agent, "OpenAI", lambda **kwargs: FakeClient())
 
-    with pytest.raises(agent.AgentError, match="quota is exhausted"):
+    with pytest.raises(agent.AgentError, match="quota/billing limit"):
         agent._converse("system", "prompt", 1, 100)
