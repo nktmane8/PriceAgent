@@ -117,8 +117,7 @@ def test_mcp_requires_oauth_and_lists_tools(client):
     r = client.post("/mcp", json=init, headers=H)
     assert r.status_code == 401 and "resource_metadata" in r.headers["www-authenticate"]
     assert client.get("/.well-known/oauth-protected-resource/mcp").json()["authorization_servers"]
-    cid, ver, r = sign_in(client, resource=config.PUBLIC_URL + "/mcp")
-    tok = exchange(client, cid, ver, r).json()["access_token"]
+    tok = json.loads(jwt_token("mcp@example.com", config.PUBLIC_URL + "/mcp").body)["access_token"]
     H["Authorization"] = "Bearer " + tok
     assert client.post("/mcp", json=init, headers=H).status_code == 200
     tools = client.post("/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"}, headers=H).json()
