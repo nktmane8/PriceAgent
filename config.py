@@ -70,6 +70,8 @@ JOB_RESULT_TTL = _int("JOB_RESULT_TTL_SECONDS", 3600)
 JOB_FAILURE_TTL = _int("JOB_FAILURE_TTL_SECONDS", 86400)
 DB_PATH = os.environ.get("DATABASE_PATH", "data/price-agent.db")
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "priceagent.onrender.com").rstrip("/")
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 API_KEYS = [k.strip() for k in os.environ.get("API_KEYS", "").split(",") if k.strip()]   # secret
 ADMIN_KEY = os.environ.get("ADMIN_KEY", "")                                             # secret
 NOMINATIM_CONTACT = os.environ.get("NOMINATIM_CONTACT", "set-NOMINATIM_CONTACT")
@@ -103,6 +105,8 @@ def problems() -> list[str]:
     if "ollama" in AI_PROVIDER and not os.environ.get("OLLAMA_API_KEY") and not OLLAMA_BASE_URL.startswith(("http://localhost", "http://127.0.0.1")):
         p.append("OLLAMA_API_KEY is required for a remote Ollama endpoint")
     if PRODUCTION_LIKE:
+        if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+            p.append("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required for Google sign-in")
         if not PUBLIC_URL.startswith("https://"):
             p.append("PUBLIC_URL must be an https URL")
         if not os.path.isabs(DB_PATH):
@@ -126,7 +130,7 @@ def assert_ready() -> None:
 
 def summary() -> dict:
     """Non-secret settings, safe to log at start-up."""
-    return {"env": APP_ENV, "public_url": PUBLIC_URL, "provider": AI_PROVIDER, "model": MODEL,
+    return {"env": APP_ENV, "public_url": PUBLIC_URL, "google_signin": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET), "provider": AI_PROVIDER, "model": MODEL,
             "gemini_model": GEMINI_MODEL, "openai_model": OPENAI_MODEL, "groq_model": GROQ_MODEL, "hf_model": HF_MODEL, "ollama_model": OLLAMA_MODEL, "workers": WORKERS, "free_render": FREE_RENDER, "db": DB_PATH,
             "searches": MAX_SEARCHES, "insight_searches": MAX_INSIGHT_SEARCHES, "cache_ttl": CACHE_TTL,
             "limits": [RATE_LIMIT, USER_RATE_LIMIT, KEY_RATE_LIMIT], "partner_keys": len(API_KEYS),
