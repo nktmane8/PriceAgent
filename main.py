@@ -1,5 +1,5 @@
 """Price Comparison Agent - API wiring.
-Web page -> /api/jobs (async, per-IP limit). AI apps -> /api/v1/* (OAuth bearer or API key) and /mcp (OAuth)."""
+Web UI and API -> OAuth bearer; partner API keys remain supported. MCP is protected by the same OAuth authorization server."""
 import hashlib
 import hmac
 import json
@@ -114,20 +114,36 @@ def respond(job):
     return JSONResponse(body, status_code=202)
 
 
-# ---- web page (anonymous, per-IP limit) -----------------------------------------
+# ---- first-party web UI ------------------------------------------------------------
+@api.get("/api/v1/me", operation_id="currentUser", summary="Validate the current OAuth login")
+def current_user(bearer: str | None = Depends(oauth2)):
+    """Return the authenticated user's identity; the web UI uses this as its login check."""
+    row = oauth.verify_access_token(bearer) if bearer else None
+    if not row or row["resource"] not in (None, "", config.PUBLIC_URL):
+        raise HTTPException(401, "Valid OAuth login required.", headers=CHALLENGE)
+    return {"authenticated": True, "user_id": str(row["user_id"]), "scope": row["scope"],
+            "expires_at": int(row["expires_at"])}
+
+
 @api.post("/api/jobs", include_in_schema=False)
-def create_job(req: CompareRequest, request: Request):
-    """Web page: start a price or insights job (anonymous, per-IP limit)."""
-    jid = start(params_of(req), "ip:" + client_ip(request), config.RATE_LIMIT)
+def create_job(req: CompareRequest, who=Depends(partner)):
+    """Legacy web endpoint: now requires OAuth instead of anonymous IP-based access."""
+    principal, limit = who
+    if principal.startswith("key:"):
+        raise HTTPException(403, "This endpoint is for signed-in web users. Use /api/v1/compare for API keys.")
+    jid = start(params_of(req), principal, limit)
     return respond(db.job_get(jid))
 
 
 @api.get("/api/jobs/{job_id}", include_in_schema=False)
-def read_job(job_id: str):
-    """Web page: poll a job by its secret id."""
+def read_job(job_id: str, who=Depends(partner)):
+    """Legacy web polling endpoint: requires OAuth and caller-owned job."""
+    principal, _ = who
     job = db.job_get(job_id)
     if not job:
         raise HTTPException(404, "Unknown job.")
+    if principal.startswith("user:") and job.get("principal") != principal:
+        raise HTTPException(403, "You do not have access to this job.")
     return respond(job)
 
 
