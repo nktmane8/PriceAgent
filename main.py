@@ -1,6 +1,6 @@
 """Price Comparison Agent - API wiring.
-Web UI and API -> OAuth bearer; partner API keys remain supported. MCP is protected by the same OAuth authorization server."""
-import hashlib
+Google-only identity with signed JWT bearer access tokens. Every business API requires a valid JWT.
+MCP is protected by the same OAuth authorization server."""
 import hmac
 import json
 import logging
@@ -17,7 +17,7 @@ from urllib.parse import urlencode
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
-from fastapi.security import APIKeyHeader, OAuth2AuthorizationCodeBearer
+from fastapi.security import OAuth2AuthorizationCodeBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.routing import Mount
@@ -43,12 +43,10 @@ api = FastAPI(title="Price Comparison Agent", servers=[{"url": config.PUBLIC_URL
               description="Region-aware price comparison across online and local stores.")
 api.include_router(oauth.router)
 
-api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 oauth2 = OAuth2AuthorizationCodeBearer(
     authorizationUrl=config.PUBLIC_URL + "/oauth/authorize", tokenUrl=config.PUBLIC_URL + "/oauth/token",
     scopes={config.SCOPE: "Compare prices"}, auto_error=False)
 CHALLENGE = {"WWW-Authenticate": f'Bearer resource_metadata="{config.PUBLIC_URL}/.well-known/oauth-protected-resource"'}
-
 
 class CompareRequest(BaseModel):
     """Request body for a price or insight lookup (validated by pydantic)."""
@@ -57,11 +55,6 @@ class CompareRequest(BaseModel):
     city: str | None = Field(default=None, max_length=60)
     sites: list[str] | None = Field(default=None, max_length=MAX_SITES)  # optional preferred domains
     kind: Literal["prices", "insights"] = KIND_PRICES  # insights = reviews + similar products
-
-
-class DeleteAccount(BaseModel):
-    """Request body for account deletion: the password confirms intent."""
-    password: str = Field(..., min_length=1, max_length=200)
 
 
 def params_of(req: CompareRequest) -> dict:
@@ -86,24 +79,15 @@ def start(params, principal, limit):
         raise HTTPException(503, "The job queue is temporarily unavailable. Please retry.", headers={"Retry-After": "10"})
 
 
-def partner(key: str | None = Depends(api_key_header), bearer: str | None = Depends(oauth2)):
-    """Who is calling /api/v1? OAuth user (preferred) or a partner API key. Returns (principal, limit)."""
-    if bearer:
-        row = oauth.verify_access_token(bearer)
-        if row and row["resource"] == config.PUBLIC_URL:
-            return "user:" + str(row["user_id"]), config.USER_RATE_LIMIT
-    if key and any(hmac.compare_digest(key, k) for k in config.API_KEYS):
-        return "key:" + hashlib.sha256(key.encode()).hexdigest()[:12], config.KEY_RATE_LIMIT
-    raise HTTPException(401, "Sign in with OAuth or send a valid X-API-Key.", headers=CHALLENGE)
-
-def web_user(bearer: str | None = Depends(oauth2)):
-    """Require a valid OAuth user for first-party browser price comparisons."""
+def jwt_user(bearer: str | None = Depends(oauth2)):
+    """Require a valid signed JWT for every business API."""
     row = oauth.verify_access_token(bearer) if bearer else None
     if not row or row["resource"] != config.PUBLIC_URL:
-        raise HTTPException(401, "Sign in with OAuth to compare prices.", headers=CHALLENGE)
+        raise HTTPException(401, "Valid Google-authenticated JWT bearer token required.", headers=CHALLENGE)
     return "user:" + str(row["user_id"]), config.USER_RATE_LIMIT
 
-
+partner = jwt_user
+web_user = jwt_user
 @api.middleware("http")
 async def security_headers(request, call_next):
     """Middleware: add nosniff and no-referrer headers to every response."""
@@ -177,18 +161,15 @@ def job_v1(job_id: str, who=Depends(partner)):
 
 
 @api.post("/api/v1/account/delete", operation_id="deleteAccount", summary="Delete my account and all data tied to it")
-def delete_account(body: "DeleteAccount", bearer: str | None = Depends(oauth2)):
-    """Delete the signed-in user's account and all data tied to it."""
+def delete_account(bearer: str | None = Depends(oauth2)):
+    """Delete the signed-in user's account; Google authentication is the account identity proof."""
     row = oauth.verify_access_token(bearer) if bearer else None
-    if not row or row["resource"] not in (None, "", config.PUBLIC_URL):
-        raise HTTPException(401, "Sign in with OAuth.", headers=CHALLENGE)
-    res = oauth.delete_user(row["user_id"], body.password)
+    if not row or row["resource"] != config.PUBLIC_URL:
+        raise HTTPException(401, "Valid Google-authenticated JWT required.", headers=CHALLENGE)
+    res = oauth.delete_user(row["user_id"])
     if res == "limited":
         raise HTTPException(429, "Too many attempts. Try again in 15 minutes.")
-    if res == "bad_password":
-        raise HTTPException(403, "Wrong password.")
     return {"deleted": True}
-
 
 # ---- helpers ---------------------------------------------------------------------------
 @api.get(
@@ -198,6 +179,7 @@ def delete_account(body: "DeleteAccount", bearer: str | None = Depends(oauth2)):
 )
 def locate(
     request: Request,
+    who=Depends(jwt_user),
     lat: float = Query(..., ge=-90, le=90, description="Latitude"),
     lon: float = Query(..., ge=-180, le=180, description="Longitude"),
 ):
@@ -324,7 +306,7 @@ def locate(
 
 
 @api.get("/api/product/resolve", include_in_schema=False)
-def resolve_product(product: str = Query(..., min_length=3, max_length=120)):
+def resolve_product(product: str = Query(..., min_length=3, max_length=120), who=Depends(jwt_user)):
     """Resolve shopping text to PriceAgent's conservative canonical product identity."""
     identity = normalize(product.strip())
     stored = db.product_get(identity["canonical_key"])
@@ -342,8 +324,8 @@ def resolve_product(product: str = Query(..., min_length=3, max_length=120)):
 
 @api.get("/api/history", include_in_schema=False)
 def history(request: Request, product: str = Query(..., min_length=3, max_length=120), country: str = Query(..., min_length=2, max_length=60),
-            city: str = Query("", max_length=60)):
-    """Lowest recorded prices for a product and region over the last 90 days."""
+            city: str = Query("", max_length=60), who=Depends(jwt_user)):
+    """Lowest recorded prices for a product and region over the last 90 days; JWT required."""
     p = {"product": product.strip(), "country": country.strip(), "city": city.strip(), "sites": []}
     err = validate(p)
     if err:
