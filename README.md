@@ -8,13 +8,13 @@ Type a product and your region. The agent supports Gemini Google Search, Groq br
 - **Region-aware discovery**, not a fixed store list; country auto-filled from browser locale, **Use my location** (GPS, rounded to ~1 km) or typed manually; local currency.
 - **Why buy this?** On request: sourced reviews from publications, video reviewers and users, pros/cons, rating summary, and similar products reviewers rate better (links required; unsourced reviews are dropped).
 - **Effective price** = listed price minus verified instant discounts only; offers listed per store; best-deal card.
-- **Background threads:** slow searches run in a thread pool; the page polls a job; identical queries share one run.
-- **SQLite tables:** persistent cache (30 min), jobs with token/search cost, rate limits, users, OAuth data. Purge thread cleans up.
-- **OAuth 2.1** (PKCE, dynamic client registration, refresh rotation) + **remote MCP server** at `/mcp`; partner API keys also supported.
+- **Durable async jobs:** production target uses PostgreSQL for job state and Redis/Valkey + a dedicated RQ worker; SQLite/in-process threads remain the local/test fallback.
+- **Durable storage:** PostgreSQL is the production target; SQLite remains the local/test backend. Cache, locks, rate limits and queue state use Redis/Valkey in the distributed target.
+- **OAuth 2.1** (PKCE, dynamic registration, refresh rotation, resource binding) protects browser comparisons and the **remote MCP server** at `/mcp`; partner API keys are also supported.
 - **Safety:** model output validated, `textContent` rendering, input validation, per-IP/user/key limits, Origin/Host checks, secrets from env only.
 - **Price history:** every fresh run is recorded; the page shows a 90-day sparkline and the lowest price seen.
 - **Account deletion** (`POST /api/v1/account/delete`), richer admin metrics, offline tests (16), CI, weekly evals harness.
-- **Ops:** `/healthz`, admin stats, Render blueprint.
+- **Ops:** `/healthz`, admin stats, Render Blueprint, dedicated worker and release-readiness gate.
 
 ## Run locally
 Settings come from `env/.env.<APP_ENV>` (default `development`); secrets go in a git-ignored `.env` or your shell. See `docs/CONFIGURATION.md`.
@@ -30,7 +30,7 @@ export GROQ_API_KEY="..."                            # PowerShell: $env:GROQ_API
 # Development defaults to automatic fallback: Groq -> Gemini -> Hugging Face -> Ollama -> OpenAI
 uvicorn main:app --reload
 ```
-Open http://127.0.0.1:8000, enter a product, confirm the country, click **Compare** (30-60 s). The database is created at `data/price-agent.db`.
+Open http://127.0.0.1:8000, click **Sign in**, create/login to an account, then enter a product and click **Compare**. Local/test mode uses SQLite; production-like mode uses PostgreSQL + Redis/Valkey.
 Tests (no API key needed): `pip install -r requirements-dev.txt && python -m pytest -q tests`.
 After deploying, check the live app and the MCP endpoint: `python tools/smoke.py https://your-app.onrender.com [--key API_KEY]`.
 
@@ -78,8 +78,8 @@ After deploying, check the live app and the MCP endpoint: `python tools/smoke.py
 | `NOMINATIM_CONTACT` | - | Your email/site for OpenStreetMap |
 | `EXTRA_ORIGINS` | empty | Extra allowed browser origins for `/mcp` |
 
-## Docs
-`docs/CODE_GUIDE.md` (**read first: architecture and flows**) · `docs/STUDY_GUIDE.md` · `docs/CONFIGURATION.md` · `docs/CODE_REFERENCE.md` · `docs/ROADMAP.md` (status and TODO) · `docs/ENGINEERING.md` (**process**) · `docs/DESIGN.md` (DDD, HLD, LLD, flows) · `docs/ARCHITECTURE.md` (tables, threads, OAuth) · `API.md` · `SECURITY.md` · `PRIVACY.md` (draft) · `RUNBOOK.md` (backups, cost, troubleshooting) · `PUBLISHING.md` · `BUSINESS.md` · `EVALS.md` · `STORE_COVERAGE.md` · `TERMS.md` (draft) · `adr/` · `CONTRIBUTING.md` · `CHANGELOG.md`
+## Stability before Java\n\nThe Python application is deliberately being stabilized before the Java 21 migration. See `docs/RELEASE_READINESS.md` for the release gate. The Java version should reproduce the frozen Python REST, OAuth, MCP, job and provider behavior before introducing new architecture.\n\n## Docs
+`docs/CODE_GUIDE.md` (**read first: architecture and flows**) · `docs/STUDY_GUIDE.md` · `docs/CONFIGURATION.md` · `docs/CODE_REFERENCE.md` · `docs/ROADMAP.md` (status and Java handoff gate) · `docs/RELEASE_READINESS.md` (release checklist) · `docs/ENGINEERING.md` (**process**) · `docs/DESIGN.md` (DDD, HLD, LLD, flows) · `docs/ARCHITECTURE.md` (tables, threads, OAuth) · `API.md` · `SECURITY.md` · `PRIVACY.md` (draft) · `RUNBOOK.md` (backups, cost, troubleshooting) · `PUBLISHING.md` · `BUSINESS.md` · `EVALS.md` · `STORE_COVERAGE.md` · `TERMS.md` (draft) · `adr/` · `CONTRIBUTING.md` · `CHANGELOG.md`
 
 ## What cannot be guaranteed
 - Store discovery depends on web search; small local shops can be missed; coverage varies by country.
@@ -90,7 +90,7 @@ After deploying, check the live app and the MCP endpoint: `python tools/smoke.py
 - Country is what the user enters or allows; it is not exact location.
 - Price history only has data for products people searched on this deployment.
 - The OAuth server is hand-written and has no email verification or password reset yet. Get it reviewed before a public launch (`docs/SECURITY.md`).
-- One instance only; SQLite and in-process threads do not scale out.
+- The distributed Postgres/Valkey/worker runtime is implemented but must be provisioned and validated before it is considered production-stable.
 
 ## Apps in this repository
 `apps/price-agent-rag` (AI + RAG, no paid key), `apps/price-agent-plain` (React, Node.js, Python and Spring Boot collectors, no AI). See `docs/VARIANTS.md` for how they differ from the app at the repository root. CI for them is in `.github/workflows/apps-ci.yml`.
