@@ -23,7 +23,7 @@ from constants import (LOGIN_ACCOUNT_LIMIT, LOGIN_IP_LIMIT, LOGIN_WINDOW, PASSWO
 from util import client_ip
 
 router = APIRouter()
-LOOPBACK = {"127.0.0.1", "localhost", "[::1]", "https://priceagent.onrender.com"}
+LOOPBACK = {"127.0.0.1", "localhost", "[::1]", "priceagent.onrender.com"}
 NO_STORE = {"Cache-Control": "no-store", "Pragma": "no-cache"}
 
 
@@ -57,7 +57,7 @@ def valid_redirect(uri):
     u = urlsplit(uri)
     if u.fragment or not u.netloc:
         return False
-    return u.scheme == "https" or (u.scheme == "http" and u.hostname in {"127.0.0.1", "localhost", "::1", "https://priceagent.onrender.com"})
+    return u.scheme == "https" or (u.scheme == "http" and u.hostname in {"127.0.0.1", "localhost", "::1", "priceagent.onrender.com"})
 
 
 def redirect_ok(registered, given):
@@ -65,7 +65,7 @@ def redirect_ok(registered, given):
     if given in registered:
         return True
     g = urlsplit(given)
-    if g.scheme == "http" and g.hostname in {"127.0.0.1", "localhost", "::1","https://priceagent.onrender.com"}:
+    if g.scheme == "http" and g.hostname in {"127.0.0.1", "localhost", "::1","priceagent.onrender.com"}:
         return any((r := urlsplit(x)).scheme == "http" and r.hostname == g.hostname and r.path == g.path
                    for x in registered)
     return False
