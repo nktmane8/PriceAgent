@@ -64,6 +64,7 @@ JOB_WAIT = _int("JOB_WAIT_SECONDS", 50)                     # sync/MCP wait befo
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 REDIS_URL = os.environ.get("REDIS_URL", "")
 QUEUE_NAME = os.environ.get("QUEUE_NAME", "price-agent")
+FREE_RENDER = os.environ.get("FREE_RENDER", "false").lower() in ("1", "true", "yes")
 JOB_TIMEOUT = _int("JOB_TIMEOUT_SECONDS", 180)
 JOB_RESULT_TTL = _int("JOB_RESULT_TTL_SECONDS", 3600)
 JOB_FAILURE_TTL = _int("JOB_FAILURE_TTL_SECONDS", 86400)
@@ -80,8 +81,8 @@ def problems() -> list[str]:
     p = []
     if PRODUCTION_LIKE and not DATABASE_URL:
         p.append("DATABASE_URL is required in staging/production")
-    if PRODUCTION_LIKE and not REDIS_URL:
-        p.append("REDIS_URL is required in staging/production")
+    if PRODUCTION_LIKE and not REDIS_URL and not FREE_RENDER:
+        p.append("REDIS_URL is required in staging/production unless FREE_RENDER is enabled")
     if AI_PROVIDER in ("gemini", "gemini,openai", "openai,gemini") and not os.environ.get("GEMINI_API_KEY"):
         p.append("GEMINI_API_KEY is required for the configured Gemini provider")
     if AI_PROVIDER in ("openai", "gemini,openai", "openai,gemini") and not os.environ.get("OPENAI_API_KEY"):
@@ -126,7 +127,7 @@ def assert_ready() -> None:
 def summary() -> dict:
     """Non-secret settings, safe to log at start-up."""
     return {"env": APP_ENV, "public_url": PUBLIC_URL, "provider": AI_PROVIDER, "model": MODEL,
-            "gemini_model": GEMINI_MODEL, "openai_model": OPENAI_MODEL, "groq_model": GROQ_MODEL, "hf_model": HF_MODEL, "ollama_model": OLLAMA_MODEL, "workers": WORKERS, "db": DB_PATH,
+            "gemini_model": GEMINI_MODEL, "openai_model": OPENAI_MODEL, "groq_model": GROQ_MODEL, "hf_model": HF_MODEL, "ollama_model": OLLAMA_MODEL, "workers": WORKERS, "free_render": FREE_RENDER, "db": DB_PATH,
             "searches": MAX_SEARCHES, "insight_searches": MAX_INSIGHT_SEARCHES, "cache_ttl": CACHE_TTL,
             "limits": [RATE_LIMIT, USER_RATE_LIMIT, KEY_RATE_LIMIT], "partner_keys": len(API_KEYS),
             "admin_enabled": bool(ADMIN_KEY)}
