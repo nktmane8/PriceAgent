@@ -40,9 +40,14 @@ def _int(name, default):
 PRODUCTION_LIKE = APP_ENV in ("staging", "production")
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 MODEL = os.environ.get("MODEL", "gpt-6-luna")
-AI_PROVIDER = os.environ.get("AI_PROVIDER", "openai")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", MODEL if AI_PROVIDER == "gemini" else "gemini-3.8-flash")
+AI_PROVIDER = os.environ.get("AI_PROVIDER", "auto")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", MODEL if AI_PROVIDER == "openai" else "gpt-6-luna")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+HF_MODEL = os.environ.get("HF_MODEL", "openai/gpt-oss-120b:fastest")
+HF_BASE_URL = os.environ.get("HF_BASE_URL", "https://router.huggingface.co/v1")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gpt-oss:20b")
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
 MAX_SEARCHES = _int("MAX_SEARCHES", 15)                     # web searches per price comparison
 MAX_INSIGHT_SEARCHES = _int("MAX_INSIGHT_SEARCHES", 10)     # searches for reviews + alternatives
 MAX_PAUSE_LOOPS = _int("MAX_PAUSE_LOOPS", 4)                # retained for config compatibility; Responses handles tool continuation
@@ -71,8 +76,21 @@ def problems() -> list[str]:
         p.append("GEMINI_API_KEY is required for the configured Gemini provider")
     if AI_PROVIDER in ("openai", "gemini,openai", "openai,gemini") and not os.environ.get("OPENAI_API_KEY"):
         p.append("OPENAI_API_KEY is required for the configured OpenAI provider")
-    if AI_PROVIDER == "auto" and not os.environ.get("OPENAI_API_KEY") and not os.environ.get("GEMINI_API_KEY"):
-        p.append("Neither OPENAI_API_KEY nor GEMINI_API_KEY is set")
+    if AI_PROVIDER == "auto" and not any([
+        os.environ.get("GROQ_API_KEY"),
+        os.environ.get("GEMINI_API_KEY"),
+        os.environ.get("HF_TOKEN"),
+        os.environ.get("OPENAI_API_KEY"),
+        os.environ.get("OLLAMA_API_KEY"),
+        OLLAMA_BASE_URL.startswith(("http://localhost", "http://127.0.0.1")),
+    ]):
+        p.append("No AI provider credentials or local Ollama endpoint are configured")
+    if "groq" in AI_PROVIDER and not os.environ.get("GROQ_API_KEY"):
+        p.append("GROQ_API_KEY is required for the configured Groq provider")
+    if "huggingface" in AI_PROVIDER and not os.environ.get("HF_TOKEN"):
+        p.append("HF_TOKEN is required for the configured Hugging Face provider")
+    if "ollama" in AI_PROVIDER and not os.environ.get("OLLAMA_API_KEY") and not OLLAMA_BASE_URL.startswith(("http://localhost", "http://127.0.0.1")):
+        p.append("OLLAMA_API_KEY is required for a remote Ollama endpoint")
     if PRODUCTION_LIKE:
         if not PUBLIC_URL.startswith("https://"):
             p.append("PUBLIC_URL must be an https URL")
@@ -98,7 +116,7 @@ def assert_ready() -> None:
 def summary() -> dict:
     """Non-secret settings, safe to log at start-up."""
     return {"env": APP_ENV, "public_url": PUBLIC_URL, "provider": AI_PROVIDER, "model": MODEL,
-            "gemini_model": GEMINI_MODEL, "openai_model": OPENAI_MODEL, "workers": WORKERS, "db": DB_PATH,
+            "gemini_model": GEMINI_MODEL, "openai_model": OPENAI_MODEL, "groq_model": GROQ_MODEL, "hf_model": HF_MODEL, "ollama_model": OLLAMA_MODEL, "workers": WORKERS, "db": DB_PATH,
             "searches": MAX_SEARCHES, "insight_searches": MAX_INSIGHT_SEARCHES, "cache_ttl": CACHE_TTL,
             "limits": [RATE_LIMIT, USER_RATE_LIMIT, KEY_RATE_LIMIT], "partner_keys": len(API_KEYS),
             "admin_enabled": bool(ADMIN_KEY)}
