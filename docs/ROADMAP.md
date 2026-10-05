@@ -53,3 +53,20 @@ Last reviewed: 2026-10-05. Update this file in the same PR that changes any stat
 | 14 | Remove dead config `MAX_PAUSE_LOOPS` (left over from the Anthropic loop) and its CONFIGURATION row | S | None | Setting gone from `config.py` and docs; tests pass |
 | 15 | Smoke test in CI after deploy (health + `/mcp` challenge only, no key) | S | Render deploy hook or scheduled run | Failing deploy raises an alert |
 \n## 4. Java handoff gate\n\n**Do not begin the production Java migration until `docs/RELEASE_READINESS.md` is green.** The Python application is the behavioral reference. Freeze REST/OpenAPI, OAuth, MCP tools, job lifecycle, provider error taxonomy, security invariants and regression fixtures before Java implementation.\n
+
+## Reference implementation hardening — 2026-10-05
+
+The ten hardening tracks have now been applied to the Python reference implementation:
+
+1. REST job ownership is principal-scoped.
+2. OAuth resources are explicit and strict.
+3. Public HTTP redirect exceptions are limited to loopback.
+4. PostgreSQL rate checks use a per-principal transaction advisory lock.
+5. Stale running jobs are recovered after worker/process loss.
+6. Job failures persist stable machine-readable error codes.
+7. Security/OAuth/job boundary tests were expanded and CI was added.
+8. A black-box external MCP OAuth smoke test is available at scripts/mcp_external_smoke.py.
+9. Thirty source-verified India product evaluation cases are committed.
+10. Release-readiness/API/security documentation now records the hardened invariants.
+
+These are code-level completions. Infrastructure-dependent proof remains a release gate: deployed Render web/worker wiring, distributed restart tests, external MCP run, backup/restore, load baseline, security review, and live evaluation execution.
