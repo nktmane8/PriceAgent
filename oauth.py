@@ -207,6 +207,73 @@ def authorize(request: Request):
     return login_page(rid, cl["name"])
 
 
+@router.get("/oauth/google/start")
+def google_start(request: Request, request_id: str):
+    if not config.GOOGLE_CLIENT_ID or not config.GOOGLE_CLIENT_SECRET:
+        return page("<p class=e>Google sign-in is not configured.</p>", 503)
+    with db.conn() as c:
+        rq = c.execute("SELECT * FROM oauth_requests WHERE id=? AND expires_at>?", (request_id, time.time())).fetchone()
+    if not rq:
+        return page("<p class=e>This sign-in request expired. Go back and try again.</p>", 400)
+    nonce = secrets.token_urlsafe(24)
+    params = {
+        "client_id": config.GOOGLE_CLIENT_ID,
+        "redirect_uri": config.PUBLIC_URL + "/oauth/google/callback",
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": _google_state(request_id, nonce),
+        "nonce": nonce,
+        "prompt": "select_account",
+    }
+    return RedirectResponse(GOOGLE_AUTH + "?" + urlencode(params), 302)
+
+@router.get("/oauth/google/callback")
+def google_callback(code: str | None = None, state: str | None = None, error: str | None = None):
+    if error:
+        return page("<p class=e>Google sign-in was cancelled.</p>", 400)
+    parsed = _google_state_read(state or "")
+    if not parsed:
+        return page("<p class=e>Invalid Google sign-in state.</p>", 400)
+    rid = parsed["rid"]
+    with db.conn() as c:
+        rq = c.execute("SELECT r.*, c.name FROM oauth_requests r JOIN oauth_clients c USING(client_id) WHERE r.id=? AND r.expires_at>?",
+                       (rid, time.time())).fetchone()
+    if not rq:
+        return page("<p class=e>This sign-in request expired. Go back and try again.</p>", 400)
+    try:
+        token_res = requests.post(GOOGLE_TOKEN, data={
+            "code": code or "", "client_id": config.GOOGLE_CLIENT_ID,
+            "client_secret": config.GOOGLE_CLIENT_SECRET,
+            "redirect_uri": config.PUBLIC_URL + "/oauth/google/callback",
+            "grant_type": "authorization_code",
+        }, timeout=10)
+        token_res.raise_for_status()
+        tokens = token_res.json()
+        claims = id_token.verify_oauth2_token(tokens["id_token"], google_requests.Request(), config.GOOGLE_CLIENT_ID)
+        if claims.get("nonce") != parsed["nonce"] or not claims.get("email") or not claims.get("email_verified"):
+            raise ValueError("unverified Google account")
+        email, google_sub = claims["email"].strip().lower(), claims["sub"]
+    except Exception:
+        return page("<p class=e>Google sign-in could not be verified. Please try again.</p>", 401)
+    with db.tx() as c:
+        u = c.execute("SELECT id, google_sub FROM users WHERE email=?", (email,)).fetchone()
+        if u:
+            if u["google_sub"] and u["google_sub"] != google_sub:
+                return page("<p class=e>This email is linked to a different Google account.</p>", 409)
+            c.execute("UPDATE users SET google_sub=?, auth_provider='google' WHERE id=?", (google_sub, u["id"]))
+            uid = u["id"]
+        else:
+            pw = hash_pw(secrets.token_urlsafe(32))
+            row = c.execute("INSERT INTO users(email,pw_hash,google_sub,auth_provider,created_at) VALUES(?,?,?,?,?) RETURNING id",
+                            (email, pw, google_sub, "google", time.time())).fetchone()
+            uid = row["id"]
+    code_value = secrets.token_urlsafe(32)
+    with db.conn() as c:
+        c.execute("INSERT INTO oauth_codes VALUES(?,?,?,?,?,?,?,?)",
+                  (sha(code_value), rq["client_id"], uid, rq["redirect_uri"], rq["challenge"], rq["scope"], rq["resource"], time.time() + config.CODE_TTL))
+        c.execute("DELETE FROM oauth_requests WHERE id=?", (rid,))
+    return back(rq["redirect_uri"], code=code_value, state=rq["state"], iss=config.PUBLIC_URL)
+
 @router.post("/oauth/authorize")
 async def authorize_post(request: Request):
     """Handle sign-in or sign-up, then redirect back with a one-time code."""
