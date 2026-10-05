@@ -280,6 +280,8 @@ def _converse(system, prompt, max_uses, max_tokens):
                 break
 
     if errors:
+        if any("quota exhausted" in error for error in errors):
+            raise AgentError("AI provider quota/billing limit is exhausted. Check the configured provider billing and usage limits.")
         raise AgentError("All configured AI providers failed. Try again shortly.")
     raise AgentError("AI provider request failed.")
 
