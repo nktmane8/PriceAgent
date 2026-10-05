@@ -348,6 +348,12 @@ def index():
     return FileResponse(BASE / "static" / "index.html")
 
 
+@api.get("/oauth/callback", include_in_schema=False)
+def oauth_callback():
+    """OAuth browser-client redirect target; the page completes the PKCE token exchange."""
+    return FileResponse(BASE / "static" / "index.html")
+
+
 # The MCP app is the outer ASGI app (it owns /mcp and its auth middleware); everything else goes to `api`.
 app = mcp.streamable_http_app()
 app.router.routes.append(Mount("/", app=api))
