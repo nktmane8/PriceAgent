@@ -151,19 +151,30 @@ def page(body, status=200):
                         f"<title>Price Comparison Agent</title><style>{CSS}</style>{body}", status, headers=SEC_HEADERS)
 
 
+def _google_state(rid, nonce):
+    payload = b64url(json.dumps({"rid": rid, "nonce": nonce}, separators=(",", ":")).encode())
+    secret = (config.ADMIN_KEY or config.PUBLIC_URL).encode()
+    sig = hmac.new(secret, payload.encode(), hashlib.sha256).hexdigest()
+    return payload + "." + sig
+
+def _google_state_read(state):
+    try:
+        payload, sig = state.split(".", 1)
+        secret = (config.ADMIN_KEY or config.PUBLIC_URL).encode()
+        expected = hmac.new(secret, payload.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected):
+            return None
+        data = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+        return data if isinstance(data, dict) and data.get("rid") and data.get("nonce") else None
+    except Exception:
+        return None
+
 def login_page(rid, client_name, msg="", status=200):
-    """Sign-in / create-account / deny page (all values HTML-escaped)."""
-    e = html.escape  # escape everything that came from outside
-    return page(f"<h1>Price Comparison Agent</h1><p><b>{e(client_name)}</b> wants to compare prices on your behalf "
-                f"(permission: <code>{e(config.SCOPE)}</code>).</p><p class=e>{e(msg)}</p>"
-                f"<form method=post action='/oauth/authorize'><input type=hidden name=request_id value='{e(rid)}'>"
-                "<input name=email type=email placeholder=Email autocomplete=username required>"
-                "<input name=password type=password placeholder='Password (10+ characters)' autocomplete=current-password required>"
-                "<button name=action value=login>Sign in and allow</button>"
-                "<button name=action value=signup>Create account and allow</button>"
-                "<button name=action value=deny formnovalidate>Deny</button></form>", status)
-
-
+    e = html.escape
+    google = ""
+    if config.GOOGLE_CLIENT_ID:
+        google = "<p><a href='/oauth/google/start?request_id=" + e(rid) + "' style='display:block;text-align:center;padding:11px;background:#fff;border:1px solid #aaa;border-radius:4px;text-decoration:none;color:#222;font-weight:600'>Continue with Google</a></p><p style='text-align:center'>or use email/password</p>"
+    return page("<h1>Price Comparison Agent</h1><p><b>" + e(client_name) + "</b> wants to compare prices on your behalf (permission: <code>" + e(config.SCOPE) + "</code>).</p><p class=e>" + e(msg) + "</p>" + google + "<form method=post action='/oauth/authorize'><input type=hidden name=request_id value='" + e(rid) + "'><input name=email type=email placeholder=Email autocomplete=username><input name=password type=password placeholder='Password' autocomplete=current-password><button name=action value=login>Sign in with email</button><button name=action value=signup>Create account</button><button name=action value=deny formnovalidate>Deny</button></form>", status)
 def back(uri, **params):
     """Redirect to the client's redirect URI with extra query parameters."""
     u = urlsplit(uri)
