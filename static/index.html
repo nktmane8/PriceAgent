@@ -18,7 +18,7 @@ main{max-width:900px;margin:0 auto;padding:28px 18px 48px}.hero{display:flex;jus
 </head>
 <body>
 <main>
-  <header class="hero"><div class="brand"><div class="logo">PA</div><div><h1>PriceAgent</h1><div class="subtitle">Live price intelligence across stores</div></div></div><div class="live">● Live search</div></header>
+  <header class="hero"><div class="brand"><div class="logo">PA</div><div><h1>PriceAgent</h1><div class="subtitle">Live price intelligence across stores</div></div></div><div class="hero-actions"><span id="userState" class="live">Checking login…</span><button id="login" type="button" class="alt">Sign in</button><button id="logout" type="button" class="alt" hidden>Sign out</button></div></header>
   <section class="search"><form id="form">
     <div class="line">
       <input id="q" type="text" minlength="3" maxlength="120" required
@@ -103,6 +103,130 @@ $("loc").addEventListener("click", () => {
     status.textContent = (err.code === 1 ? "Location permission was denied." : "Could not detect your location.") + " Type your country and city instead.";
   }, {timeout: 10000, maximumAge: 600000});
 });
+
+// ---- OAuth 2.1 browser client --------------------------------------------------
+// The browser is a public OAuth client. It uses Authorization Code + PKCE S256,
+// stores short-lived tokens only in sessionStorage, and never sends passwords to JS.
+const OAUTH = {
+  token: "pa_access_token",
+  refresh: "pa_refresh_token",
+  expiry: "pa_token_expiry",
+  state: "pa_oauth_state",
+  verifier: "pa_pkce_verifier",
+  client: "pa_client_id"
+};
+const OAUTH_SCOPE = "prices:read";
+const REDIRECT_URI = window.location.origin + "/oauth/callback";
+
+function randomUrlSafe(bytes = 32) {
+  const b = new Uint8Array(bytes); crypto.getRandomValues(b);
+  return btoa(String.fromCharCode(...b)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+async function pkceChallenge(verifier) {
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+  return randomBase64(hash);
+}
+function randomBase64(buffer) {
+  const b = new Uint8Array(buffer);
+  return btoa(String.fromCharCode(...b)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+function token() { return sessionStorage.getItem(OAUTH.token) || ""; }
+function clearSession() {
+  Object.values(OAUTH).filter(k => k !== OAUTH.client).forEach(k => sessionStorage.removeItem(k));
+}
+function setToken(d) {
+  sessionStorage.setItem(OAUTH.token, d.access_token);
+  if (d.refresh_token) sessionStorage.setItem(OAUTH.refresh, d.refresh_token);
+  sessionStorage.setItem(OAUTH.expiry, String(Date.now() + (Number(d.expires_in || 3600) * 1000)));
+}
+async function ensureClient() {
+  let id = localStorage.getItem(OAUTH.client);
+  if (id) return id;
+  const d = await call("/oauth/register", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({client_name:"PriceAgent Web", redirect_uris:[REDIRECT_URI]})
+  });
+  if (!d.client_id) throw new Error("Could not register the web OAuth client.");
+  localStorage.setItem(OAUTH.client, d.client_id);
+  return d.client_id;
+}
+async function login() {
+  const clientId = await ensureClient();
+  const state = randomUrlSafe(24), verifier = randomUrlSafe(48);
+  const challenge = await pkceChallenge(verifier);
+  sessionStorage.setItem(OAUTH.state, state);
+  sessionStorage.setItem(OAUTH.verifier, verifier);
+  const p = new URLSearchParams({
+    response_type:"code", client_id:clientId, redirect_uri:REDIRECT_URI,
+    scope:OAUTH_SCOPE, state, code_challenge:challenge, code_challenge_method:"S256",
+    resource:window.location.origin
+  });
+  window.location.assign("/oauth/authorize?" + p.toString());
+}
+async function finishOAuthCallback() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("code"), returnedState = params.get("state"), error = params.get("error");
+  if (!code && !error) return false;
+  const expectedState = sessionStorage.getItem(OAUTH.state);
+  const verifier = sessionStorage.getItem(OAUTH.verifier);
+  if (error) throw new Error(params.get("error_description") || "OAuth authorization was denied.");
+  if (!expectedState || returnedState !== expectedState || !verifier) throw new Error("OAuth state or PKCE verifier is invalid.");
+  const clientId = localStorage.getItem(OAUTH.client);
+  const d = await call("/oauth/token", {
+    method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams({
+      grant_type:"authorization_code", code, client_id:clientId, redirect_uri:REDIRECT_URI, code_verifier:verifier
+    })
+  });
+  setToken(d);
+  sessionStorage.removeItem(OAUTH.state); sessionStorage.removeItem(OAUTH.verifier);
+  history.replaceState({}, document.title, "/");
+  return true;
+}
+async function refreshLogin() {
+  const refresh = sessionStorage.getItem(OAUTH.refresh), clientId = localStorage.getItem(OAUTH.client);
+  if (!refresh || !clientId) return false;
+  try {
+    const d = await call("/oauth/token", {
+      method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"},
+      body:new URLSearchParams({grant_type:"refresh_token", refresh_token:refresh, client_id:clientId})
+    });
+    setToken(d); return true;
+  } catch (e) { clearSession(); return false; }
+}
+async function requireLogin() {
+  if (!token()) { await login(); throw new Error("Redirecting to sign in…"); }
+  return true;
+}
+async function authCall(url, opts = {}) {
+  let t = token();
+  if (!t) { await login(); throw new Error("Redirecting to sign in…"); }
+  const headers = new Headers(opts.headers || {});
+  headers.set("Authorization", "Bearer " + t);
+  headers.set("Accept", "application/json");
+  let res = await fetch(url, {...opts, headers});
+  if (res.status === 401) {
+    if (await refreshLogin()) {
+      headers.set("Authorization", "Bearer " + token());
+      res = await fetch(url, {...opts, headers});
+    }
+  }
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (res.status === 401) { clearSession(); await login(); }
+    throw new Error(typeof d.detail === "string" ? d.detail : "Request failed (" + res.status + ").");
+  }
+  return d;
+}
+async function updateLoginState() {
+  const has = !!token();
+  $("login").hidden = has; $("logout").hidden = !has;
+  $("userState").textContent = has ? "● Signed in" : "● Sign in required";
+}
+$("login").addEventListener("click", () => login().catch(e => {
+  status.className = "error"; status.textContent = e.message || "Sign in failed.";
+}));
+$("logout").addEventListener("click", () => { clearSession(); updateLoginState(); status.textContent = "Signed out. Sign in to compare prices."; });
 
 // Format money using the currency code returned by the server (falls back safely).
 function money(n, cur) {
@@ -234,14 +358,15 @@ function renderHistory(h) {
 
 // The server runs slow searches in a background thread; we start a job and poll it.
 async function runJob(kind, message) {
-  let job = await call("/api/jobs", {method: "POST", headers: {"Content-Type": "application/json"},
+  await requireLogin();
+  let job = await authCall("/api/v1/compare", {method: "POST", headers: {"Content-Type": "application/json"},
     body: JSON.stringify({...last, kind})});
   const t0 = Date.now();
   while (job.status === "queued" || job.status === "running") {
     if (Date.now() - t0 > 240000) throw new Error("Still running after 4 minutes. Try again later.");
     status.textContent = job.status === "queued" ? "Waiting in the queue…" : message;
     await sleep(3000);
-    job = await call("/api/jobs/" + encodeURIComponent(job.job_id));
+    job = await authCall("/api/v1/jobs/" + encodeURIComponent(job.job_id));
   }
   if (job.status === "error") throw new Error(job.error || "The request failed.");
   return job;
@@ -310,6 +435,20 @@ function renderInsights(d) {
   if (d.notes) insights.append(el("div", String(d.notes), "card muted"));
   insights.append(el("div", "Summaries come from public pages and may be incomplete. Sponsored content and fake reviews exist: open the sources and compare several before buying.", "card muted"));
 }
+
+(async () => {
+  try {
+    await finishOAuthCallback();
+    if (token()) {
+      try { await authCall("/api/v1/me"); }
+      catch (_) { clearSession(); }
+    }
+    await updateLoginState();
+  } catch (e) {
+    clearSession(); await updateLoginState();
+    status.className = "error"; status.textContent = e.message || "Sign in failed.";
+  }
+})();
 
 form.addEventListener("submit", async e => {
   e.preventDefault();
