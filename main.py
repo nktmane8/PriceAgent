@@ -96,7 +96,7 @@ def partner(key: str | None = Depends(api_key_header), bearer: str | None = Depe
 def web_user(bearer: str | None = Depends(oauth2)):
     """Require a valid OAuth user for first-party browser price comparisons."""
     row = oauth.verify_access_token(bearer) if bearer else None
-    if not row or row["resource"] not in (None, "", config.PUBLIC_URL):
+    if not row or row["resource"] != config.PUBLIC_URL:
         raise HTTPException(401, "Sign in with OAuth to compare prices.", headers=CHALLENGE)
     return "user:" + str(row["user_id"]), config.USER_RATE_LIMIT
 
