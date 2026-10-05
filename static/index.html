@@ -502,9 +502,11 @@ async function showHistory() {
 // --- reviews and similar products ---
 function card(title) { const c = el("div", undefined, "card"); c.append(el("h2", title)); return c; }
 function list(items) { const ul = el("ul"); items.forEach(i => ul.append(el("li", String(i)))); return ul; }
-function openLink(text, url) {
-  if (typeof url !== "string" || !url.startsWith("http")) return null;   // only real http(s) links
-  const a = el("a", text, "open"); a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer"; return a;
+function openLink(text, url, eventName=null, metadata={}) {
+  if (typeof url !== "string" || !url.startsWith("http")) return null;
+  const a = el("a", text, "open"); a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer";
+  if (eventName) a.addEventListener("click", () => trackEvent(eventName, metadata));
+  return a;
 }
 const GROUPS = [["publication", "Newspaper and publication reviews"], ["video", "Video reviews"], ["user", "User reviews"], ["other", "Other sources"]];
 
@@ -521,7 +523,7 @@ function renderInsights(d) {
       row.append(el("span", title, "site"), el("span", v.reviewer || "YouTube", "muted"));
       c.append(row);
       if (v.summary) c.append(el("div", v.summary, "muted"));
-      const a = openLink("Watch review", v.url); if (a) c.append(a);
+      const a = openLink("Watch review", v.url, "youtube_review_click", {store:v.reviewer || "YouTube"}); if (a) c.append(a);
     });
     insights.append(c);
   }
@@ -573,7 +575,7 @@ function renderInsights(d) {
       if ((x.better_at || []).length) c.append(el("div", "Better at: " + x.better_at.join(", "), "muted"));
       if (x.trade_off) c.append(el("div", "Trade-off: " + x.trade_off, "muted"));
       const a = openLink("Learn more", x.url); if (a) c.append(a);
-      const buy = openLink("Buy similar product", x.buy_url || x.url);
+      const buy = openLink("Buy similar product", x.buy_url || x.url, "buy_click", {product:x.name || "similar"});
       if (buy) c.append(buy);
     }
     insights.append(c);
