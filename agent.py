@@ -75,7 +75,8 @@ def clean(data) -> dict:
             "url": url if url.startswith(("http://", "https://")) else "",
             "phone": _s(r.get("phone"), 40), "store_rating": _num(r.get("store_rating")),
             "rating_count": int(_num(r.get("rating_count"))) if _num(r.get("rating_count")) is not None else None,
-            "deal_type": _s(r.get("deal_type"), 80), "address": _s(r.get("address"), 160)})
+            "deal_type": _s(r.get("deal_type"), 80), "address": _s(r.get("address"), 160),
+            "maps_url": _s(r.get("maps_url"), 600) if _s(r.get("maps_url"), 600).startswith(("http://", "https://")) else ""})
     bd = data.get("best_deal") if isinstance(data.get("best_deal"), dict) else {}
     cur = _s(data.get("currency"), 3).upper()
     return {"product": _s(data.get("product"), 200), "region": _s(data.get("region"), 120),
