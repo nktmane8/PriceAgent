@@ -92,7 +92,7 @@ def problems() -> list[str]:
         os.environ.get("HF_TOKEN"),
         os.environ.get("OPENAI_API_KEY"),
         os.environ.get("OLLAMA_API_KEY"),
-        OLLAMA_BASE_URL.startswith(("http://localhost", "http://127.0.0.1")),
+        os.environ.get("OLLAMA_BASE_URL"),
     ]):
         p.append("No AI provider credentials or local Ollama endpoint are configured")
     if "groq" in AI_PROVIDER and not os.environ.get("GROQ_API_KEY"):
