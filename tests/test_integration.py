@@ -3,6 +3,7 @@ import openai
 
 import agent
 import main
+import config
 import io
 import json
 import urllib.request
@@ -55,7 +56,7 @@ def test_compare_api_returns_200_for_completed_job(client, monkeypatch):
 
     response = client.post(
         "/api/v1/compare",
-        headers={"X-API-Key": "testkey"},
+        headers={"Authorization": "Bearer " + json.loads(main.oauth.issue("test-client", 1, config.SCOPE, config.PUBLIC_URL, "test-family").body)["access_token"]},
         json={"product": "Phone X", "country": "India", "city": "Pune"},
     )
 
