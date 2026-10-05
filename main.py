@@ -162,47 +162,111 @@ def locate(
     lat: float = Query(..., ge=-90, le=90, description="Latitude"),
     lon: float = Query(..., ge=-180, le=180, description="Longitude"),
 ):
-    """Coordinates -> country + city via OpenStreetMap Nominatim. Rounded to ~1 km and cached for CACHE_TTL seconds."""
-    wait = db.rate_check("loc:" + client_ip(request), config.LOCATE_LIMIT)
-    if wait:
-        raise HTTPException(429, f"Too many lookups. Try again in about {wait} minutes.")
+    """Coordinates -> country + city via OpenStreetMap Nominatim.
+
+    The lookup is rounded to ~1 km and cached for CACHE_TTL seconds. Provider
+    failures are treated as a temporary dependency outage rather than exposing
+    a generic 502 to the browser.
+    """
     cache_key = "location:" + str(round(lat, 2)) + ":" + str(round(lon, 2))
+
+    # Cache hits do not call Nominatim and should not consume the per-IP quota.
     cached = db.cache_get(cache_key)
     if cached is not None:
         return cached
 
-    url = "https://nominatim.openstreetmap.org/reverse?" + urlencode(
-        {"format": "jsonv2", "lat": round(lat, 2), "lon": round(lon, 2), "zoom": 10, "accept-language": "en"})
-    req = urllib.request.Request(url, headers={"User-Agent": f"price-agent/1.0 ({config.NOMINATIM_CONTACT})"})
+    wait = db.rate_check("loc:" + client_ip(request), config.LOCATE_LIMIT)
+    if wait:
+        raise HTTPException(429, f"Too many lookups. Try again in about {wait} minutes.")
+
+    url = "https://nominatim.openstreetmap.org/reverse?" + urlencode({
+        "format": "jsonv2",
+        "lat": round(lat, 2),
+        "lon": round(lon, 2),
+        "zoom": 10,
+        "accept-language": "en",
+    })
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": f"price-agent/1.0 ({config.NOMINATIM_CONTACT})",
+            "Accept": "application/json",
+        },
+    )
+
+    logger = logging.getLogger("price-agent")
     addr = None
     last_error = None
+    retry_after = None
+
+    # Nominatim is an external dependency. Retry only transient failures and
+    # keep the total blocking time bounded.
     for attempt in range(3):
         try:
-            with urllib.request.urlopen(req, timeout=8) as r:
-                addr = json.load(r).get("address", {})
+            with urllib.request.urlopen(req, timeout=8) as response:
+                if response.status != 200:
+                    raise urllib.error.HTTPError(
+                        url, response.status, f"Unexpected status {response.status}",
+                        response.headers, None,
+                    )
+                payload = json.load(response)
+                if not isinstance(payload, dict):
+                    raise ValueError("Nominatim returned a non-object JSON response")
+                addr = payload.get("address") or {}
+                if not isinstance(addr, dict):
+                    raise ValueError("Nominatim returned an invalid address payload")
             break
         except urllib.error.HTTPError as e:
             last_error = e
-            if e.code not in (429, 502, 503, 504) or attempt == 2:
-                break
             retry_after = e.headers.get("Retry-After")
+            transient = e.code in (429, 500, 502, 503, 504)
+            logger.warning(
+                "location provider HTTP failure: status=%s attempt=%s/3 retryable=%s",
+                e.code, attempt + 1, transient,
+            )
+            if not transient or attempt == 2:
+                break
             try:
                 delay = min(4, max(1, int(retry_after))) if retry_after else 2 ** attempt
             except (TypeError, ValueError):
                 delay = 2 ** attempt
             time.sleep(delay)
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as e:
             last_error = e
+            logger.warning(
+                "location provider failure: type=%s attempt=%s/3",
+                type(e).__name__, attempt + 1,
+            )
             if attempt == 2:
                 break
             time.sleep(2 ** attempt)
+
     if addr is None:
-        logging.getLogger("price-agent").warning("location provider failed after retries: %s", last_error)
-        raise HTTPException(502, "Could not look up your location. Type your country and city instead.")
+        logger.warning(
+            "location provider unavailable after retries: error=%r retry_after=%s",
+            last_error, retry_after,
+        )
+        headers = {"Retry-After": "10"}
+        if retry_after and str(retry_after).isdigit():
+            headers["Retry-After"] = retry_after
+        raise HTTPException(
+            503,
+            "Location service is temporarily unavailable. Type your country and city instead.",
+            headers=headers,
+        )
+
     if not addr.get("country"):
         raise HTTPException(404, "No country found for that location. Type it instead.")
-    city = (addr.get("city") or addr.get("town") or addr.get("village") or addr.get("state_district")
-            or addr.get("county") or addr.get("state") or "")
+
+    city = (
+        addr.get("city")
+        or addr.get("town")
+        or addr.get("village")
+        or addr.get("state_district")
+        or addr.get("county")
+        or addr.get("state")
+        or ""
+    )
     result = {"country": addr["country"], "city": city}
     db.cache_set(cache_key, result)
     return result
