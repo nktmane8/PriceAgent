@@ -168,8 +168,22 @@ def _converse(system, prompt, max_uses, max_tokens):
             if getattr(item, "type", None) == "web_search_call"
         )
         return response.output_text, usage
-    except openai.RateLimitError:
-        raise AgentError("The AI service is busy. Try again shortly.")
+    except openai.RateLimitError as e:
+        # A 429 is not always transient: OpenAI can return it for request
+        # throttling or for exhausted project/account quota. Do not tell users
+        # to retry when the latter is the actual cause.
+        body = getattr(e, "body", None)
+        detail = body.get("error", {}) if isinstance(body, dict) else {}
+        code = detail.get("code")
+        error_type = detail.get("type")
+        message = detail.get("message")
+        logging.getLogger("price-agent").error(
+            "AI provider rate limit: type=%s code=%s message=%s",
+            error_type, code, message,
+        )
+        if code in ("insufficient_quota", "billing_hard_limit_reached") or error_type == "insufficient_quota":
+            raise AgentError("AI provider quota is exhausted. Please check the OpenAI project billing/quota.")
+        raise AgentError("The AI provider is rate-limited. Please retry in a few moments.")
     except openai.APIError as e:
         raise AgentError(f"AI service error: {getattr(e, 'message', 'unknown')}")
 
