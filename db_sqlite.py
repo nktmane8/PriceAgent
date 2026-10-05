@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, key TEXT NOT NULL, status T
 CREATE INDEX IF NOT EXISTS ix_jobs_key ON jobs(key, status);
 CREATE TABLE IF NOT EXISTS price_history(id INTEGER PRIMARY KEY, key TEXT NOT NULL, store TEXT NOT NULL, price REAL, effective_price REAL, currency TEXT, ts REAL NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_hist ON price_history(key, ts);
+CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY AUTOINCREMENT, canonical_key TEXT UNIQUE NOT NULL, display_name TEXT NOT NULL, brand TEXT, variant TEXT, storage TEXT, color TEXT, created_at REAL NOT NULL, updated_at REAL NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_products_brand ON products(brand);
 """
 
 
@@ -148,6 +150,26 @@ def job_active(key):
         r = c.execute("SELECT id FROM jobs WHERE key=? AND status IN ('queued','running') "
                       "ORDER BY created_at DESC LIMIT 1", (key,)).fetchone()
     return r["id"] if r else None
+
+
+def product_upsert(identity):
+    """Persist a canonical product identity and return its stable id."""
+    now = time.time()
+    with tx() as c:
+        c.execute(
+            "INSERT INTO products(canonical_key,display_name,brand,variant,storage,color,created_at,updated_at) "
+            "VALUES(?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(canonical_key) DO UPDATE SET display_name=excluded.display_name,updated_at=excluded.updated_at",
+            (identity["canonical_key"], identity["display_name"], identity["brand"], identity["variant"],
+             identity["storage"], identity["color"], now, now),
+        )
+        row = c.execute("SELECT id FROM products WHERE canonical_key=?", (identity["canonical_key"],)).fetchone()
+    return int(row["id"])
+
+def product_get(canonical_key):
+    with conn() as c:
+        r = c.execute("SELECT * FROM products WHERE canonical_key=?", (canonical_key,)).fetchone()
+    return dict(r) if r else None
 
 
 # ---- price history -----------------------------------------------------
