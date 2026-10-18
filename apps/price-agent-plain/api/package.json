@@ -10,5 +10,5 @@
     "seed": "node src/seed.js",
     "test": "node --test --disable-warning=ExperimentalWarning \"test/*.test.js\""
   },
-  "dependencies": { "express": "^5.1.0" }
+  "dependencies": { "express": "^5.3.0" }
 }
